@@ -24,9 +24,24 @@ SOFTWARE.
 
 This library is released under the MIT License.
 
-It references portions of the *System Reference Document 5.1 (SRD 5.1)*  
+### D&D 5th Edition
+
+This library references portions of the *System Reference Document 5.1 (SRD 5.1)*  
 by Wizards of the Coast LLC, available at https://dnd.wizards.com/resources/systems-reference-document.  
 
 The System Reference Document (SRD 5.2) is © 2014–2024 Wizards of the Coast LLC  
-and is licensed under CC BY 4.0.  See https://dnd.wizards.com/systems-reference-document.
+and is licensed under CC BY 4.0. See https://dnd.wizards.com/systems-reference-document.
+
+### Call of Cthulhu
+
+This library implements game mechanics inspired by Call of Cthulhu®.  
+
+Call of Cthulhu® is a registered trademark of Chaosium Inc.  
+Used with permission.
+
+The percentile dice system (d100) and bonus/penalty die mechanics are used under  
+Chaosium's Basic Roleplaying Open Game License.
+
+This library does not reproduce or include copyrighted content from Call of Cthulhu  
+sourcebooks, but implements compatible game mechanics for d100 skill checks.
 
