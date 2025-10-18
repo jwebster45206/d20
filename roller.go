@@ -62,3 +62,51 @@ func (r *Roller) Roll(rollCount uint, dieFaces uint, modifiers []Modifier) (Roll
 
 	return NewRollOutcome(rollCount, dieFaces, rolls, modifiers, diceTotal+modifierTotal), nil
 }
+
+// RollWithAdvantage performs dice rolling with advantage/disadvantage mechanics.
+// This is a utility function for implementing 5e advantage/disadvantage rules.
+//
+// - Normal: Rolls the specified dice normally
+// - Advantage: For each die, rolls twice and takes the higher value
+// - Disadvantage: For each die, rolls twice and takes the lower value
+//
+// Returns the final dice values after applying advantage/disadvantage.
+// This function is called internally by Actor methods but is also public for
+// direct use with saving throws, initiative, and other game mechanics.
+func RollWithAdvantage(roller *Roller, rollCount uint, dieFaces uint, advantage AdvantageType) ([]int, error) {
+	// Validate input
+	if rollCount == 0 {
+		return nil, errRollCountZero
+	}
+	if dieFaces == 0 {
+		return nil, errDieFacesZero
+	}
+
+	rolls := make([]int, rollCount)
+
+	switch advantage {
+	case Normal:
+		// Roll normally
+		for i := range rollCount {
+			rolls[i] = roller.rng.Intn(int(dieFaces)) + 1
+		}
+
+	case Advantage:
+		// Roll twice, take higher for each die
+		for i := range rollCount {
+			roll1 := roller.rng.Intn(int(dieFaces)) + 1
+			roll2 := roller.rng.Intn(int(dieFaces)) + 1
+			rolls[i] = max(roll1, roll2)
+		}
+
+	case Disadvantage:
+		// Roll twice, take lower for each die
+		for i := range rollCount {
+			roll1 := roller.rng.Intn(int(dieFaces)) + 1
+			roll2 := roller.rng.Intn(int(dieFaces)) + 1
+			rolls[i] = min(roll1, roll2)
+		}
+	}
+
+	return rolls, nil
+}

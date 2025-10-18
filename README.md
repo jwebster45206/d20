@@ -107,20 +107,23 @@ func NewActor(hp, ac, initiative int) (*Actor, error)
 func NewActorWithAttributes(hp, ac, init int, attrs map[string]int) (*Actor, error)
 
 // HP Management
-func (a *Actor) GetHP() int
-func (a *Actor) SetHP(hp int) error
-func (a *Actor) TakeDamage(damage int)
-func (a *Actor) Heal(amount int)
-func (a *Actor) IsAlive() bool
+func (a *Actor) HP() int                  // Current HP
+func (a *Actor) MaxHP() int               // Maximum HP
+func (a *Actor) SetHP(hp int) error       // Set current HP (0 to max)
+func (a *Actor) SetMaxHP(maxHP int) error // Set maximum HP (auto-adjusts current if needed)
+func (a *Actor) TakeDamage(damage int)    // Reduce HP (won't go below 0)
+func (a *Actor) Heal(amount int)          // Increase HP (won't exceed max)
+func (a *Actor) ResetHP()                 // Restore to max HP
+func (a *Actor) IsAlive() bool            // Returns true if HP > 0
 
 // AC and Initiative
-func (a *Actor) GetAC() int
+func (a *Actor) AC() int
 func (a *Actor) SetAC(ac int) error
-func (a *Actor) GetInitiative() int
+func (a *Actor) Initiative() int
 func (a *Actor) SetInitiative(init int)
 
 // Attribute Management (keys automatically lowercased)
-func (a *Actor) GetAttribute(key string) (int, bool)
+func (a *Actor) Attribute(key string) (int, bool)
 func (a *Actor) SetAttribute(key string, value int)
 func (a *Actor) HasAttribute(key string) bool
 func (a *Actor) RemoveAttribute(key string)
@@ -128,12 +131,12 @@ func (a *Actor) RemoveAttribute(key string)
 // Combat Modifier Management (reasons automatically lowercased)
 func (a *Actor) AddCombatModifier(m Modifier)
 func (a *Actor) RemoveCombatModifier(reason string)
-func (a *Actor) ClearCombatModifiers()
 func (a *Actor) GetCombatModifiers() []Modifier
 ```
 
 **Design Notes**: Actor uses private fields with accessor methods to:
-- Enforce data validation (HP and AC must be positive)
+- Track both maximum and current HP separately (damage/healing affect current, leveling affects max)
+- Enforce data validation (HP and AC must be positive, current HP can't exceed max)
 - Automatically lowercase all attribute keys and modifier reasons for consistency
 - Prevent direct slice/map mutations that could cause bugs
 - Provide a clean, discoverable API
@@ -335,9 +338,13 @@ athleticsCheck, _ := fighter.SkillCheck("athletics", d20.Advantage)
 // HP management
 fighter.TakeDamage(15)
 if fighter.IsAlive() {
-    fmt.Printf("Fighter has %d HP remaining\n", fighter.GetHP())
+    fmt.Printf("Fighter has %d/%d HP remaining\n", fighter.HP(), fighter.MaxHP())
 }
 fighter.Heal(8)
+
+// Level up - increase max HP
+fighter.SetMaxHP(50)
+fighter.ResetHP() // Full heal after rest
 ```
 
 ### D100 System Usage
