@@ -33,145 +33,179 @@ func main() {
     // Create a roller
     roller := d20.NewRoller(42) // seed for reproducible results
     
-    // Roll some dice
-    result, err := roller.Roll(2, 20, []d20.Modifier{
-        {Value: 3, Reason: "Strength"},
-        {Value: 2, Reason: "Proficiency"},
-    })
+    // Roll some dice with fluent API
+    result, err := roller.Dice(1, 20).
+        WithModifier("strength", 3).
+        WithModifier("proficiency", 2).
+        Roll()
     if err != nil {
         panic(err)
     }
     
-    fmt.Println(result.Detail)
-    // Rolled 2d20... 16, 12; +3 strength, +2 proficiency; *Result: 33*
+    fmt.Printf("Attack roll: %d\n", result.Value)
+    
+    // Roll with advantage
+    advResult, _ := roller.Dice(1, 20).
+        WithAdvantage().
+        WithModifier("dexterity", 4).
+        Roll()
+    fmt.Printf("Roll: %d (dice: %v)\n", advResult.Value, advResult.DiceRolls)
 }
 ```
 
 ## Core Types
 
-### Roller
+### Roller & RollBuilder
 
-The `Roller` struct provides the core dice rolling functionality:
+The `Roller` provides dice rolling functionality through a fluent builder API:
 
 ```go
-type Roller struct {
-    // Internal random number generator (seeded for deterministic results)
-}
-
+// Create a roller
 func NewRoller(seed int64) *Roller
 func NewRandomRoller() *Roller
-func (r *Roller) Roll(rollCount uint, dieFaces uint, modifiers []Modifier) (RollValue, error)
+
+// Start building a roll
+func (r *Roller) Dice(rollCount, dieFaces int) *RollBuilder
+
+// RollBuilder - fluent API for configuring rolls
+type RollBuilder struct { /* private fields */ }
+
+func (rb *RollBuilder) WithModifier(name string, value int) *RollBuilder
+func (rb *RollBuilder) WithModifiers(modifiers map[string]int) *RollBuilder
+func (rb *RollBuilder) WithAdvantage() *RollBuilder
+func (rb *RollBuilder) WithDisadvantage() *RollBuilder
+func (rb *RollBuilder) Normal() *RollBuilder
+func (rb *RollBuilder) Roll() (*RollOutcome, error)
 ```
 
-- **rollCount**: Number of dice to roll
-- **dieFaces**: Number of faces on each die (d4, d6, d8, d10, d12, d20, d100)
-- **modifiers**: Array of modifiers to apply to the roll
+**Advantage/Disadvantage Mechanics:**
+- **Advantage**: Rolls 2 dice, uses the higher value, returns both in `DiceRolls`
+- **Disadvantage**: Rolls 2 dice, uses the lower value, returns both in `DiceRolls`
+- **Normal**: Rolls 1 die per count, returns all in `DiceRolls`
 
-### Modifier
+This transparency allows you to see all dice rolled, even when using advantage/disadvantage.
 
-Modifiers represent buffs or debuffs applied to dice rolls:
-
-```go
-type Modifier struct {
-    Value  int    // Positive for bonus, negative for penalty
-    Reason string // Description of the modifier source
-}
-```
-
-### RollValue
+### RollOutcome
 
 The result of a dice roll operation:
 
 ```go
-type RollValue struct {
-    Value     int    // Final calculated result
-    DiceRolls []int  // Raw values from each die rolled
-    Detail    string // Formatted roll description
+type RollOutcome struct {
+    Value     int            // Final calculated result (dice + modifiers)
+    DiceRolls []int          // Raw die values (2 dice for adv/dis, 1+ for normal)
+    Detail    string         // Human-readable description
 }
 ```
 
-The `Detail` field provides a Bioware-style formatted string showing the complete roll breakdown:
-- `Rolled 2d20... 16, 12; +3 strength, +2 proficiency; *Result: 33*`
+**Examples:**
+- Normal roll: `DiceRolls: [17]`, `Detail: "Rolled 1d20: 17"`
+- With advantage: `DiceRolls: [6, 8]`, `Value: 8`, `Detail: "Rolled 1d20 with advantage: 6, 8 (took 8)"`
+- With modifiers: `Detail: "Rolled 1d20: 6 | +3 strength | Total: 9"`
 
 ## Actor System
 
-Actors represent characters, NPCs, and monsters in the game world:
+Actors represent characters, NPCs, and monsters in the game world. The library uses a fluent builder pattern for creating actors:
 
 ```go
 type Actor struct {
-    // Private fields - use constructor and accessors
+    // Private fields - use builder and accessors
 }
 
-// Constructor
-func NewActor(hp, ac, initiative int) (*Actor, error)
-func NewActorWithAttributes(hp, ac, init int, attrs map[string]int) (*Actor, error)
+// ActorBuilder - fluent API for creating actors
+type ActorBuilder struct { /* private fields */ }
+
+func NewActor(id string, hp, ac int) *ActorBuilder
+func (ab *ActorBuilder) WithInitiative(init int) *ActorBuilder
+func (ab *ActorBuilder) WithAttribute(name string, value int) *ActorBuilder
+func (ab *ActorBuilder) WithAttributes(attrs map[string]int) *ActorBuilder
+func (ab *ActorBuilder) WithCombatModifier(name string, value int) *ActorBuilder
+func (ab *ActorBuilder) WithCombatModifiers(mods map[string]int) *ActorBuilder
+func (ab *ActorBuilder) Build() (*Actor, error)
 
 // HP Management
+func (a *Actor) ID() string               // Normalized identifier
 func (a *Actor) HP() int                  // Current HP
 func (a *Actor) MaxHP() int               // Maximum HP
-func (a *Actor) SetHP(hp int) error       // Set current HP (0 to max)
-func (a *Actor) SetMaxHP(maxHP int) error // Set maximum HP (auto-adjusts current if needed)
-func (a *Actor) TakeDamage(damage int)    // Reduce HP (won't go below 0)
-func (a *Actor) Heal(amount int)          // Increase HP (won't exceed max)
+func (a *Actor) SetHP(hp int)             // Set current HP (0 to max)
+func (a *Actor) SetMaxHP(maxHP int)       // Set maximum HP (auto-adjusts current if needed)
+func (a *Actor) AddHP(amount int)         // Increase HP (won't exceed max)
+func (a *Actor) SubHP(amount int)         // Reduce HP (won't go below 0)
 func (a *Actor) ResetHP()                 // Restore to max HP
-func (a *Actor) IsAlive() bool            // Returns true if HP > 0
+func (a *Actor) IsKnockedOut() bool       // Returns true if HP <= 0
 
 // AC and Initiative
 func (a *Actor) AC() int
-func (a *Actor) SetAC(ac int) error
+func (a *Actor) SetAC(ac int)
 func (a *Actor) Initiative() int
 func (a *Actor) SetInitiative(init int)
 
-// Attribute Management (keys automatically lowercased)
+// Attribute Management (keys automatically lowercased and snake_cased)
 func (a *Actor) Attribute(key string) (int, bool)
 func (a *Actor) SetAttribute(key string, value int)
 func (a *Actor) HasAttribute(key string) bool
 func (a *Actor) RemoveAttribute(key string)
+func (a *Actor) IncrementAttribute(key string, amount int)
+func (a *Actor) DecrementAttribute(key string, amount int)
 
-// Combat Modifier Management (reasons automatically lowercased)
-func (a *Actor) AddCombatModifier(m Modifier)
-func (a *Actor) RemoveCombatModifier(reason string)
-func (a *Actor) GetCombatModifiers() []Modifier
+// Combat Modifier Management (names automatically lowercased)
+func (a *Actor) AddCombatModifier(name string, value int)
+func (a *Actor) RemoveCombatModifier(name string)
+
+// Roll Methods - return RollBuilder for further configuration
+func (a *Actor) SkillCheck(skill string, roller *Roller) (*RollBuilder, error)
+func (a *Actor) AttackRoll(roller *Roller) *RollBuilder
+func (a *Actor) D100SkillCheck(skill string, roller *Roller) (bool, *RollOutcome, error)
 ```
 
-**Design Notes**: Actor uses private fields with accessor methods to:
-- Track both maximum and current HP separately (damage/healing affect current, leveling affects max)
-- Enforce data validation (HP and AC must be positive, current HP can't exceed max)
-- Automatically lowercase all attribute keys and modifier reasons for consistency
-- Prevent direct slice/map mutations that could cause bugs
-- Provide a clean, discoverable API
+**Design Notes**: Actor uses private fields with accessor methods and a builder pattern to:
+- Provide a fluent, discoverable API for construction
+- Track both maximum and current HP separately
+- Enforce data validation (HP and AC must be positive)
+- Automatically normalize IDs to snake_case (e.g., "Goblin King" → "goblin_king")
+- Return `*RollBuilder` from roll methods for flexible configuration
+- Support method chaining for intuitive actor creation
 
 ### Creating Actors
 
-Use the constructor functions to create actors with validated initial values:
+Use the builder pattern to create actors with optional configuration:
 
 ```go
-// Basic constructor with validation
-fighter, err := d20.NewActor(45, 18, 2)
-if err != nil {
-    panic(err) // HP and AC must be > 0
-}
+// Basic actor
+fighter, _ := d20.NewActor("Aragorn", 45, 18).Build()
 
-// Or create with initial attributes
-wizard, err := d20.NewActorWithAttributes(22, 12, 3, map[string]int{
-    "intelligence": 18,
-    "wisdom":       14,
-    "arcana":       8,
-    "history":      6,
-})
+// Actor with attributes and modifiers
+wizard, _ := d20.NewActor("Gandalf", 38, 14).
+    WithInitiative(3).
+    WithAttributes(map[string]int{
+        "intelligence": 18,
+        "wisdom":       16,
+    }).
+    WithCombatModifiers(map[string]int{
+        "intelligence": 4,
+        "proficiency":  4,
+    }).
+    Build()
 ```
 
 ### Combat Modifiers
 
-The `CombatModifiers` field contains all active offensive bonuses and penalties that apply to the actor's attack rolls. This includes:
+Combat modifiers apply to an actor's attack rolls. Add them during construction or modify at runtime:
 
+```go
+actor.AddCombatModifier("strength", 4)
+actor.AddCombatModifier("proficiency", 3)
+actor.AddCombatModifier("magic_weapon", 1)
+actor.RemoveCombatModifier("magic_weapon")
+```
+
+Common combat modifiers include:
 - **Ability Modifiers**: Strength for melee, Dexterity for ranged/finesse weapons
 - **Proficiency Bonus**: If proficient with the weapon being used
 - **Equipment Bonuses**: Magic weapon bonuses (+1, +2, +3 weapons)
 - **Spell Effects**: Bless, Guidance, or other temporary bonuses
 - **Class Features**: Fighting styles, rage bonuses, etc.
 
-Note: AC represents the actor's total Armor Class including all static bonuses (armor, shields, Dex modifier, natural armor, etc.). Situational AC modifiers (cover, spells) are handled at the time of attack resolution.
+Note: AC represents the actor's total Armor Class including all static bonuses (armor, shields, Dex modifier, natural armor, etc.). Situational AC modifiers (cover, spells) can be added when rolling.
 
 ### Attributes
 
@@ -181,40 +215,39 @@ The flexible attribute system supports standard D&D 5e ability scores and derive
 - **Skills**: `athletics`, `stealth`, `perception`, `insight`, etc.
 - **Custom Attributes**: Any string key with integer value
 
-### Actor Methods
+### Actor Roll Methods
 
-Actors have methods for common 5e mechanics:
+Actor roll methods return `*RollBuilder` for flexible configuration:
 
 ```go
-// AdvantageType represents advantage, normal, or disadvantage rolls
-type AdvantageType int
+// SkillCheck - Returns a RollBuilder configured with the skill modifier
+builder, err := actor.SkillCheck("stealth", roller)
+if err != nil {
+    // skill not found in attributes
+}
+result, _ := builder.Roll()                    // Normal roll
+result, _ := builder.WithAdvantage().Roll()    // With advantage
+result, _ := builder.WithDisadvantage().Roll() // With disadvantage
 
-const (
-    Disadvantage AdvantageType = iota
-    Normal
-    Advantage
-)
+// AttackRoll - Returns a RollBuilder with all combat modifiers applied
+builder := actor.AttackRoll(roller)
+result, _ := builder.Roll()                             // Normal attack
+result, _ := builder.WithAdvantage().Roll()             // Attack with advantage
+result, _ := builder.WithModifier("bless", 1).Roll()    // Add temporary modifier
 
-// SkillCheck performs a skill check using 5e conventions (d20 + modifiers)
-func (a *Actor) SkillCheck(skill string, roller *Roller, advantage AdvantageType) (RollValue, error)
-
-// D100SkillCheck performs a percentile skill check (roll under skill value)
-func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus int) (bool, RollValue, error)
-
-// AttackRoll makes an attack roll using the actor's CombatModifiers
-func (a *Actor) AttackRoll(roller *Roller, advantage AdvantageType) (RollValue, error)
-
-// AttackRollWithModifiers makes an attack roll with additional situational modifiers
-func (a *Actor) AttackRollWithModifiers(roller *Roller, advantage AdvantageType, extraModifiers []Modifier) (RollValue, error)
+// D100SkillCheck - Percentile system (Call of Cthulhu, etc.)
+success, outcome, err := actor.D100SkillCheck("stealth", roller)
 ```
 
 #### Advantage/Disadvantage Mechanics
 
-- **Advantage**: Roll 2d20, take the higher result
-- **Disadvantage**: Roll 2d20, take the lower result  
-- **Normal**: Roll 1d20
+Advantage and disadvantage are configured on the `RollBuilder`:
 
-This system is core to 5e and applies to attack rolls, skill checks, and saving throws.
+- **Advantage**: Rolls 2 dice, uses higher, shows both in `DiceRolls: [6, 8]`
+- **Disadvantage**: Rolls 2 dice, uses lower, shows both in `DiceRolls: [6, 8]`
+- **Normal**: Rolls standard number of dice
+
+This system is core to 5e and applies to attack rolls, skill checks, and saving throws. The library returns all dice rolled for transparency.
 
 #### D100 System Support
 
@@ -238,21 +271,26 @@ The library supports d100/percentile systems like Call of Cthulhu:
 
 ### Skill Checks
 
-Skill checks use the actor's attribute values from the `Attributes` map:
+Skill checks use the actor's attribute values and return configurable `RollBuilder`:
 
 ```go
 // D&D 5e skill checks (d20 + modifiers)
-stealthCheck, _ := actor.SkillCheck("stealth", roller, d20.Normal)
-athleticsCheck, _ := actor.SkillCheck("athletics", roller, d20.Advantage)
-perceptionCheck, _ := actor.SkillCheck("perception", roller, d20.Disadvantage)
+builder, _ := actor.SkillCheck("stealth", roller)
+result, _ := builder.Roll()  // Normal check
+
+builder, _ = actor.SkillCheck("athletics", roller)
+result, _ = builder.WithAdvantage().Roll()  // With advantage
+
+builder, _ = actor.SkillCheck("perception", roller)
+result, _ = builder.WithDisadvantage().Roll()  // With disadvantage
 
 // Call of Cthulhu skill checks (d100, roll under skill value)
-success, roll, _ := investigator.D100SkillCheck("stealth", roller, false)
-bonusSuccess, roll, _ := investigator.D100SkillCheck("fighting", roller, true) // bonus die
+success, outcome, _ := investigator.D100SkillCheck("stealth", roller)
 
 // Check success for d100 systems
 if success {
-    fmt.Printf("Skill check succeeded with %d (needed ≤ %d)", roll.Value, investigator.Attributes["stealth"])
+    skillValue, _ := investigator.Attribute("stealth")
+    fmt.Printf("Skill check succeeded with %d (needed ≤ %d)", outcome.Value, skillValue)
 }
 ```
 
@@ -286,95 +324,197 @@ Call of Cthulhu® is a registered trademark of Chaosium Inc. This library implem
 roller := d20.NewRoller(time.Now().UnixNano())
 
 // Simple d20 roll
-result, _ := roller.Roll(1, 20, nil)
+result, _ := roller.Dice(1, 20).Roll()
+fmt.Printf("Rolled: %d\n", result.Value)
 
 // Attack roll with modifiers
-attackRoll, _ := roller.Roll(1, 20, []d20.Modifier{
-    {Value: 5, Reason: "Strength"},
-    {Value: 3, Reason: "Proficiency"},
-})
+result, _ = roller.Dice(1, 20).
+    WithModifier("strength", 5).
+    WithModifier("proficiency", 3).
+    Roll()
+fmt.Printf("Attack: %d\n", result.Value)
+
+// Using a map for multiple modifiers
+result, _ = roller.Dice(1, 20).
+    WithModifiers(map[string]int{
+        "strength":    5,
+        "proficiency": 3,
+    }).
+    Roll()
 
 // Damage roll
-damageRoll, _ := roller.Roll(1, 8, []d20.Modifier{
-    {Value: 3, Reason: "Strength"},
-})
+result, _ = roller.Dice(1, 8).
+    WithModifier("strength", 3).
+    Roll()
+fmt.Printf("Damage: %d\n", result.Value)
+
+// Roll with advantage (shows all dice)
+result, _ = roller.Dice(1, 20).
+    WithAdvantage().
+    WithModifier("dexterity", 4).
+    Roll()
+fmt.Printf("Roll: %d (from dice: %v)\n", result.Value, result.DiceRolls)
+// Output: Roll: 18 (from dice: [15, 18])
 ```
 
 ### Actor Usage
 
 ```go
-// Create a character using the constructor
-fighter, _ := d20.NewActor(45, 18, 2)
+roller := d20.NewRoller(time.Now().UnixNano())
 
-// Set up attributes
-fighter.SetAttribute("strength", 16)
-fighter.SetAttribute("dexterity", 14)
-fighter.SetAttribute("constitution", 15)
-fighter.SetAttribute("athletics", 5)  // includes proficiency
-fighter.SetAttribute("stealth", 2)    // dex modifier only
+// Create a character using the builder pattern
+fighter, _ := d20.NewActor("Aragorn", 45, 18).
+    WithInitiative(2).
+    WithAttributes(map[string]int{
+        "strength":     16,
+        "dexterity":    14,
+        "constitution": 15,
+        "athletics":    5,  // includes proficiency
+        "stealth":      2,  // dex modifier only
+    }).
+    WithCombatModifiers(map[string]int{
+        "strength":     3,
+        "proficiency":  3,
+        "magic_weapon": 1,
+    }).
+    Build()
 
-// Add combat modifiers
-fighter.AddCombatModifier(d20.Modifier{Value: 3, Reason: "Strength"})
-fighter.AddCombatModifier(d20.Modifier{Value: 3, Reason: "Proficiency"})
-fighter.AddCombatModifier(d20.Modifier{Value: 1, Reason: "Magic Weapon"})
+// Or create a simple actor and modify it
+wizard, _ := d20.NewActor("Gandalf", 22, 12).
+    WithInitiative(3).
+    Build()
 
-// Or create with attributes in one call
-wizard, _ := d20.NewActorWithAttributes(22, 12, 3, map[string]int{
-    "intelligence": 18,
-    "wisdom":       14,
-    "arcana":       8,
-    "history":      6,
-})
+wizard.SetAttribute("intelligence", 18)
+wizard.SetAttribute("wisdom", 14)
+wizard.AddCombatModifier("intelligence", 4)
 
 // Make an attack roll using the actor's combat modifiers
-attackRoll, _ := fighter.AttackRoll(roller, d20.Normal)
+result, _ := fighter.AttackRoll(roller).Roll()
+fmt.Printf("Attack: %d\n", result.Value)
 
 // Attack with advantage (flanking, help action, etc.)
-advantageAttack, _ := fighter.AttackRoll(roller, d20.Advantage)
+result, _ = fighter.AttackRoll(roller).WithAdvantage().Roll()
+fmt.Printf("Attack with advantage: %d (dice: %v)\n", result.Value, result.DiceRolls)
 
 // Attack with additional situational modifiers
-situationalAttack, _ := fighter.AttackRollWithModifiers(roller, d20.Normal, []d20.Modifier{
-    d20.NewModifier(2, "Flanking"),
-    d20.NewModifier(-2, "Partial Cover"),
-})
+result, _ = fighter.AttackRoll(roller).
+    WithModifier("bless", 1).
+    WithModifier("cover_penalty", -2).
+    Roll()
 
 // Perform skill checks
-stealthCheck, _ := fighter.SkillCheck("stealth", roller, d20.Normal)
-athleticsCheck, _ := fighter.SkillCheck("athletics", d20.Advantage)
+builder, _ := fighter.SkillCheck("stealth", roller)
+result, _ = builder.Roll()
+
+builder, _ = fighter.SkillCheck("athletics", roller)
+result, _ = builder.WithAdvantage().Roll()
 
 // HP management
-fighter.TakeDamage(15)
-if fighter.IsAlive() {
+fighter.SubHP(15)
+if !fighter.IsKnockedOut() {
     fmt.Printf("Fighter has %d/%d HP remaining\n", fighter.HP(), fighter.MaxHP())
 }
-fighter.Heal(8)
+fighter.AddHP(8)
 
 // Level up - increase max HP
 fighter.SetMaxHP(50)
 fighter.ResetHP() // Full heal after rest
+
+// Temporary attribute buffs/debuffs
+fighter.IncrementAttribute("strength", 2)  // Bull's Strength spell
+fighter.DecrementAttribute("dexterity", 1) // Exhaustion
 ```
 
 ### D100 System Usage
 
 ```go
 // Create a Call of Cthulhu investigator
-investigator, _ := d20.NewActorWithAttributes(12, 10, 0, map[string]int{
-    "stealth":      45,  // 45% skill
-    "fighting":     60,  // 60% skill  
-    "firearms":     25,  // 25% skill
-    "spot_hidden":  70,  // 70% skill
-})
+investigator, _ := d20.NewActor("Detective Morgan", 12, 10).
+    WithAttributes(map[string]int{
+        "stealth":     45,  // 45% skill
+        "fighting":    60,  // 60% skill  
+        "firearms":    25,  // 25% skill
+        "spot_hidden": 70,  // 70% skill
+    }).
+    Build()
 
 // Perform d100 skill checks
-stealthSuccess, stealthRoll, _ := investigator.D100SkillCheck("stealth", roller, false)
-fightingSuccess, fightingRoll, _ := investigator.D100SkillCheck("fighting", roller, true) // bonus die
-
-// Check results
-if stealthSuccess {
-    fmt.Printf("Stealth succeeded: rolled %d ≤ %d", stealthRoll.Value, investigator.Attributes["stealth"])
+success, outcome, _ := investigator.D100SkillCheck("stealth", roller)
+if success {
+    skillValue, _ := investigator.Attribute("stealth")
+    fmt.Printf("Stealth succeeded: rolled %d ≤ %d\n", outcome.Value, skillValue)
+} else {
+    fmt.Printf("Stealth failed: rolled %d\n", outcome.Value)
 }
+
+// Combat using Fighting skill
+success, outcome, _ = investigator.D100SkillCheck("fighting", roller)
 ```
 
+
+## Migration Guide
+
+If you're upgrading from an earlier version of this library, here's how to migrate to the new fluent API:
+
+### Dice Rolling Changes
+
+**Old API:**
+```go
+result, _ := roller.Roll(1, 20, []d20.Modifier{
+    {Value: 3, Reason: "Strength"},
+    {Value: 2, Reason: "Proficiency"},
+})
+```
+
+**New API:**
+```go
+result, _ := roller.Dice(1, 20).
+    WithModifier("strength", 3).
+    WithModifier("proficiency", 2).
+    Roll()
+```
+
+### Actor Creation Changes
+
+**Old API:**
+```go
+actor, _ := d20.NewActor(45, 18, 2)
+actor.SetAttribute("strength", 16)
+actor.AddCombatModifier(d20.Modifier{Value: 3, Reason: "Strength"})
+```
+
+**New API:**
+```go
+actor, _ := d20.NewActor("Fighter", 45, 18).
+    WithInitiative(2).
+    WithAttribute("strength", 16).
+    WithCombatModifier("strength", 3).
+    Build()
+```
+
+### Attack and Skill Check Changes
+
+**Old API:**
+```go
+result, _ := actor.AttackRoll(roller, d20.Advantage)
+result, _ := actor.SkillCheck("stealth", roller, d20.Normal)
+```
+
+**New API:**
+```go
+result, _ := actor.AttackRoll(roller).WithAdvantage().Roll()
+
+builder, _ := actor.SkillCheck("stealth", roller)
+result, _ = builder.Roll()
+```
+
+### Key Benefits of New API
+
+1. **Method Chaining**: Build complex rolls step-by-step with clear intent
+2. **Transparency**: Advantage/disadvantage now returns all dice rolled
+3. **Flexibility**: Add modifiers conditionally without rebuilding arrays
+4. **Readability**: Named modifiers instead of Modifier structs
+5. **Normalized IDs**: Actors now have human-readable IDs that auto-normalize
 
 ## References
 
