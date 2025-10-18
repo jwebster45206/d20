@@ -116,7 +116,7 @@ func TestActor_HPManagement(t *testing.T) {
 	}
 
 	// Test SetHP above max
-	actor.SetHP(45) // Reset to max
+	_ = actor.SetHP(45) // Reset to max
 	if err := actor.SetHP(50); err == nil {
 		t.Error("SetHP(50) expected error (exceeds max HP 45)")
 	}
@@ -130,43 +130,43 @@ func TestActor_HPManagement(t *testing.T) {
 	}
 
 	// Test SetMaxHP below current HP adjusts current HP
-	actor.SetHP(50)
-	actor.SetMaxHP(40)
+	_ = actor.SetHP(50)
+	_ = actor.SetMaxHP(40)
 	if actor.HP() != 40 {
 		t.Errorf("After reducing max HP, current HP should adjust to %d, got %d", 40, actor.HP())
 	}
 
-	// Test TakeDamage
-	actor.SetHP(35)
+	// Test SubHP
+	_ = actor.SetHP(35)
 	actor.SubHP(15)
 	if actor.HP() != 20 {
-		t.Errorf("After TakeDamage(15), HP = %d, want 20", actor.HP())
+		t.Errorf("After SubHP(15), HP = %d, want 20", actor.HP())
 	}
 
-	// Test TakeDamage below 0
+	// Test SubHP below 0
 	actor.SubHP(100)
 	if actor.HP() != 0 {
 		t.Errorf("After massive damage, HP = %d, want 0", actor.HP())
 	}
 
-	// Test IsAlive
+	// Test IsKnockedOut
 	if !actor.IsKnockedOut() {
-		t.Error("Actor with 0 HP should not be alive")
+		t.Error("Actor with 0 HP should be knocked out")
 	}
 
-	// Test Heal
+	// Test AddHP
 	actor.AddHP(20)
 	if actor.HP() != 20 {
-		t.Errorf("After Heal(20), HP = %d, want 20", actor.HP())
+		t.Errorf("After AddHP(20), HP = %d, want 20", actor.HP())
 	}
 	if actor.IsKnockedOut() {
 		t.Error("Actor with 20 HP should be alive")
 	}
 
-	// Test Heal doesn't exceed max HP
+	// Test AddHP doesn't exceed max HP
 	actor.AddHP(100)
 	if actor.HP() != actor.MaxHP() {
-		t.Errorf("After Heal(100), HP = %d, should not exceed max HP %d", actor.HP(), actor.MaxHP())
+		t.Errorf("After AddHP(100), HP = %d, should not exceed max HP %d", actor.HP(), actor.MaxHP())
 	}
 
 	// Test ResetHP
