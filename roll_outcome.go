@@ -43,7 +43,7 @@ func formatRollDetail(rollCount uint, dieFaces uint, rolls []int, modifiers []Mo
 	if len(modifiers) > 0 {
 		modStrs := make([]string, len(modifiers))
 		for i, mod := range modifiers {
-			sign := "+"
+			var sign string
 			val := mod.Value
 			if val < 0 {
 				sign = "" // val is already negative, will display as -X
