@@ -99,12 +99,66 @@ Actors represent characters, NPCs, and monsters in the game world:
 
 ```go
 type Actor struct {
-    HP              int               // Hit Points
-    AC              int               // Armor Class (total, including all bonuses)
-    Initiative      int               // Initiative/speed modifier
-    CombatModifiers []Modifier        // Active offensive modifiers (weapon, strength, proficiency, etc.)
-    Attributes      map[string]int    // Flexible attribute system
+    // Private fields - use constructor and accessors
 }
+
+// Constructor
+func NewActor(hp, ac, initiative int) (*Actor, error)
+func NewActorWithAttributes(hp, ac, init int, attrs map[string]int) (*Actor, error)
+
+// HP Management
+func (a *Actor) HP() int                  // Current HP
+func (a *Actor) MaxHP() int               // Maximum HP
+func (a *Actor) SetHP(hp int) error       // Set current HP (0 to max)
+func (a *Actor) SetMaxHP(maxHP int) error // Set maximum HP (auto-adjusts current if needed)
+func (a *Actor) TakeDamage(damage int)    // Reduce HP (won't go below 0)
+func (a *Actor) Heal(amount int)          // Increase HP (won't exceed max)
+func (a *Actor) ResetHP()                 // Restore to max HP
+func (a *Actor) IsAlive() bool            // Returns true if HP > 0
+
+// AC and Initiative
+func (a *Actor) AC() int
+func (a *Actor) SetAC(ac int) error
+func (a *Actor) Initiative() int
+func (a *Actor) SetInitiative(init int)
+
+// Attribute Management (keys automatically lowercased)
+func (a *Actor) Attribute(key string) (int, bool)
+func (a *Actor) SetAttribute(key string, value int)
+func (a *Actor) HasAttribute(key string) bool
+func (a *Actor) RemoveAttribute(key string)
+
+// Combat Modifier Management (reasons automatically lowercased)
+func (a *Actor) AddCombatModifier(m Modifier)
+func (a *Actor) RemoveCombatModifier(reason string)
+func (a *Actor) GetCombatModifiers() []Modifier
+```
+
+**Design Notes**: Actor uses private fields with accessor methods to:
+- Track both maximum and current HP separately (damage/healing affect current, leveling affects max)
+- Enforce data validation (HP and AC must be positive, current HP can't exceed max)
+- Automatically lowercase all attribute keys and modifier reasons for consistency
+- Prevent direct slice/map mutations that could cause bugs
+- Provide a clean, discoverable API
+
+### Creating Actors
+
+Use the constructor functions to create actors with validated initial values:
+
+```go
+// Basic constructor with validation
+fighter, err := d20.NewActor(45, 18, 2)
+if err != nil {
+    panic(err) // HP and AC must be > 0
+}
+
+// Or create with initial attributes
+wizard, err := d20.NewActorWithAttributes(22, 12, 3, map[string]int{
+    "intelligence": 18,
+    "wisdom":       14,
+    "arcana":       8,
+    "history":      6,
+})
 ```
 
 ### Combat Modifiers
@@ -242,24 +296,28 @@ damageRoll, _ := roller.Roll(1, 8, []d20.Modifier{
 ### Actor Usage
 
 ```go
-// Create a character
-fighter := &d20.Actor{
-    HP:         45,
-    AC:         18, // Total AC including armor, shield, dex modifier
-    Initiative: 2,
-    CombatModifiers: []d20.Modifier{
-        {Value: 3, Reason: "Strength"},
-        {Value: 3, Reason: "Proficiency"},
-        {Value: 1, Reason: "Magic Weapon"},
-    },
-    Attributes: map[string]int{
-        "strength":     16,
-        "dexterity":    14, 
-        "constitution": 15,
-        "athletics":    5,  // includes proficiency
-        "stealth":      2,  // dex modifier only
-    },
-}
+// Create a character using the constructor
+fighter, _ := d20.NewActor(45, 18, 2)
+
+// Set up attributes
+fighter.SetAttribute("strength", 16)
+fighter.SetAttribute("dexterity", 14)
+fighter.SetAttribute("constitution", 15)
+fighter.SetAttribute("athletics", 5)  // includes proficiency
+fighter.SetAttribute("stealth", 2)    // dex modifier only
+
+// Add combat modifiers
+fighter.AddCombatModifier(d20.Modifier{Value: 3, Reason: "Strength"})
+fighter.AddCombatModifier(d20.Modifier{Value: 3, Reason: "Proficiency"})
+fighter.AddCombatModifier(d20.Modifier{Value: 1, Reason: "Magic Weapon"})
+
+// Or create with attributes in one call
+wizard, _ := d20.NewActorWithAttributes(22, 12, 3, map[string]int{
+    "intelligence": 18,
+    "wisdom":       14,
+    "arcana":       8,
+    "history":      6,
+})
 
 // Make an attack roll using the actor's combat modifiers
 attackRoll, _ := fighter.AttackRoll(roller, d20.Normal)
@@ -269,28 +327,36 @@ advantageAttack, _ := fighter.AttackRoll(roller, d20.Advantage)
 
 // Attack with additional situational modifiers
 situationalAttack, _ := fighter.AttackRollWithModifiers(roller, d20.Normal, []d20.Modifier{
-    {Value: 2, Reason: "Flanking"},
-    {Value: -2, Reason: "Partial Cover"},
+    d20.NewModifier(2, "Flanking"),
+    d20.NewModifier(-2, "Partial Cover"),
 })
 
 // Perform skill checks
 stealthCheck, _ := fighter.SkillCheck("stealth", roller, d20.Normal)
-athleticsCheck, _ := fighter.SkillCheck("athletics", roller, d20.Advantage)
+athleticsCheck, _ := fighter.SkillCheck("athletics", d20.Advantage)
+
+// HP management
+fighter.TakeDamage(15)
+if fighter.IsAlive() {
+    fmt.Printf("Fighter has %d/%d HP remaining\n", fighter.HP(), fighter.MaxHP())
+}
+fighter.Heal(8)
+
+// Level up - increase max HP
+fighter.SetMaxHP(50)
+fighter.ResetHP() // Full heal after rest
 ```
 
 ### D100 System Usage
 
 ```go
 // Create a Call of Cthulhu investigator
-investigator := &d20.Actor{
-    HP: 12,
-    Attributes: map[string]int{
-        "stealth":   45,  // 45% skill
-        "fighting":  60,  // 60% skill  
-        "firearms":  25,  // 25% skill
-        "spot_hidden": 70, // 70% skill
-    },
-}
+investigator, _ := d20.NewActorWithAttributes(12, 10, 0, map[string]int{
+    "stealth":      45,  // 45% skill
+    "fighting":     60,  // 60% skill  
+    "firearms":     25,  // 25% skill
+    "spot_hidden":  70,  // 70% skill
+})
 
 // Perform d100 skill checks
 stealthSuccess, stealthRoll, _ := investigator.D100SkillCheck("stealth", roller, false)
@@ -302,24 +368,11 @@ if stealthSuccess {
 }
 ```
 
-## Contributing
-
-This library aims to provide a solid foundation for D20-based gaming applications while maintaining compatibility with 5e SRD conventions. Contributions should:
-
-1. Follow 5e SRD guidelines and terminology
-2. Maintain clean, testable interfaces
-3. Include comprehensive documentation
-4. Add appropriate test coverage
-
-## License
-
-This project is licensed under the MIT License. Content inspired by or derived from the D&D 5th Edition System Reference Document is used under the Creative Commons Attribution 4.0 International License.
 
 ## References
 
 - [D&D 5th Edition System Reference Document](https://dnd.wizards.com/resources/systems-reference-document)
 - [5e SRD CC-BY License](https://creativecommons.org/licenses/by/4.0/)
-
 
 ## Implementation Plan - v0 (Code Agent friend, this section is just for you!)
 
@@ -327,64 +380,52 @@ This is the complete implementation plan for v0 of the D20 library. We're buildi
 
 ### Phase 1: Core Foundation ⚡ PRIORITY
 **Goal**: Get basic dice rolling working with the new API
-
-#### 1.1 Core Types & Structs
-```go
-// types.go
-type Modifier struct {
-    Value  int
-    Reason string
-}
-
-type RollValue struct {
-    Value     int
-    DiceRolls []int
-    Detail    string
-}
-
-type AdvantageType int
-const (
-    Disadvantage AdvantageType = iota
-    Normal
-    Advantage
-)
-
-type Roller struct {
-    rng *rand.Rand
-}
-
-type Actor struct {
-    HP              int
-    AC              int
-    Initiative      int
-    CombatModifiers []Modifier
-    Attributes      map[string]int
-}
-```
-
-#### 1.2 Core Roller Implementation
-```go
-// roller.go
-func NewRoller(seed int64) *Roller
-func (r *Roller) Roll(rollCount uint, dieFaces uint, modifiers []Modifier) (RollValue, error)
-```
-- ✅ Implement seeded random number generation
-- ✅ Roll multiple dice and sum results
-- ✅ Apply modifiers to final result
-- ✅ Generate Bioware-style Detail string
-- ✅ Input validation (rollCount > 0, dieFaces > 0)
-
-#### 1.3 Detail Formatting
-```go
-// Format: "Rolled 2d20...; values 16, 12; +3 strength, +2 proficiency; *Result: 33*"
-func formatRollDetail(rollCount uint, dieFaces uint, rolls []int, modifiers []Modifier, finalValue int) string
-```
-
-#### Unit Tests
-Test `Roll` with deterministic seeds.
+**Status**: Complete.
 
 ### Phase 2: Actor Methods 🎯 CORE FEATURES
 **Goal**: Implement the main Actor functionality for D&D 5e
+
+#### 2.0 Actor Constructor
+NewActor
+
+#### 2.0 Actor Constructor & Accessors
+```go
+// actor.go
+
+// Constructors
+func NewActor(hp, ac, initiative int) (*Actor, error)
+func NewActorWithAttributes(hp, ac, init int, attrs map[string]int) (*Actor, error)
+
+// HP Management
+func (a *Actor) GetHP() int
+func (a *Actor) SetHP(hp int) error
+func (a *Actor) TakeDamage(damage int)
+func (a *Actor) Heal(amount int)
+func (a *Actor) IsAlive() bool
+
+// AC and Initiative
+func (a *Actor) GetAC() int
+func (a *Actor) SetAC(ac int) error
+func (a *Actor) GetInitiative() int
+func (a *Actor) SetInitiative(init int)
+
+// Attribute Management
+func (a *Actor) GetAttribute(key string) (int, bool)
+func (a *Actor) SetAttribute(key string, value int)
+func (a *Actor) HasAttribute(key string) bool
+func (a *Actor) RemoveAttribute(key string)
+
+// Combat Modifier Management
+func (a *Actor) AddCombatModifier(m Modifier)
+func (a *Actor) RemoveCombatModifier(reason string)
+func (a *Actor) ClearCombatModifiers()
+func (a *Actor) GetCombatModifiers() []Modifier
+```
+- Validate HP > 0, AC > 0 in constructors and setters
+- Initialize maps/slices in constructors
+- Automatically lowercase all attribute keys and modifier reasons
+- Return copies of slices/maps to prevent external mutations
+- Unit test all validation and edge cases
 
 #### 2.1 Basic Skill Checks
 ```go
