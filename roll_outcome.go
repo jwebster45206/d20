@@ -14,7 +14,7 @@ type RollOutcome struct {
 
 // NewRollOutcome creates a new RollOutcome with formatted detail string.
 // The detail string follows Bioware-style formatting:
-// "Rolled 2d20... values 16, 12; +3 strength, +2 proficiency; *Result: 33*"
+// "Rolled 2d20... 16, 12; +3 strength, +2 proficiency; *Result: 33*"
 func NewRollOutcome(rollCount uint, dieFaces uint, rolls []int, modifiers []Modifier, finalValue int) RollOutcome {
 	return RollOutcome{
 		Value:     finalValue,
@@ -25,10 +25,8 @@ func NewRollOutcome(rollCount uint, dieFaces uint, rolls []int, modifiers []Modi
 
 // formatRollDetail creates a display-formatted string for a roll result.
 func formatRollDetail(rollCount uint, dieFaces uint, rolls []int, modifiers []Modifier, finalValue int) string {
-	var parts []string
-
-	// Dice notation (e.g., "Rolled 2d20...")
-	parts = append(parts, fmt.Sprintf("Rolled %dd%d...", rollCount, dieFaces))
+	// Start with dice notation (e.g., "Rolled 2d20...")
+	result := fmt.Sprintf("Rolled %dd%d...", rollCount, dieFaces)
 
 	// Individual die values
 	if len(rolls) > 0 {
@@ -36,7 +34,7 @@ func formatRollDetail(rollCount uint, dieFaces uint, rolls []int, modifiers []Mo
 		for i, r := range rolls {
 			rollStrs[i] = fmt.Sprintf("%d", r)
 		}
-		parts = append(parts, fmt.Sprintf("values %s", strings.Join(rollStrs, ", ")))
+		result += " " + strings.Join(rollStrs, ", ")
 	}
 
 	// Modifiers
@@ -52,10 +50,10 @@ func formatRollDetail(rollCount uint, dieFaces uint, rolls []int, modifiers []Mo
 			}
 			modStrs[i] = fmt.Sprintf("%s%d %s", sign, val, strings.ToLower(mod.Reason))
 		}
-		parts = append(parts, strings.Join(modStrs, ", "))
+		result += "; " + strings.Join(modStrs, ", ")
 	}
 
 	// Final result
-	parts = append(parts, fmt.Sprintf("*Result: %d*", finalValue))
-	return strings.Join(parts, "; ")
+	result += "; *Result: " + fmt.Sprintf("%d*", finalValue)
+	return result
 }
