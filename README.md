@@ -379,6 +379,9 @@ func (r *Roller) Roll(rollCount uint, dieFaces uint, modifiers []Modifier) (Roll
 func formatRollDetail(rollCount uint, dieFaces uint, rolls []int, modifiers []Modifier, finalValue int) string
 ```
 
+#### Unit Tests
+Test `Roll` with deterministic seeds.
+
 ### Phase 2: Actor Methods 🎯 CORE FEATURES
 **Goal**: Implement the main Actor functionality for D&D 5e
 
@@ -390,6 +393,7 @@ func (a *Actor) SkillCheck(skill string, roller *Roller, advantage AdvantageType
 - Look up skill value from Attributes map
 - Handle Normal/Advantage/Disadvantage dice rolling
 - Add skill modifier to d20 roll
+- Calls RollWithAdvantage
 - Return formatted RollValue
 
 #### 2.2 Attack Rolls
@@ -400,16 +404,23 @@ func (a *Actor) AttackRollWithModifiers(roller *Roller, advantage AdvantageType,
 - Use actor's CombatModifiers for base attack bonus
 - Handle advantage/disadvantage mechanics
 - Combine base and situational modifiers
+- Calls RollWithAdvantage
 - Return formatted attack roll result
 
 #### 2.3 Advantage/Disadvantage Logic
+
 ```go
-func rollWithAdvantage(roller *Roller, rollCount uint, dieFaces uint, advantage AdvantageType) ([]int, error)
+func RollWithAdvantage(roller *Roller, rollCount uint, dieFaces uint, advantage AdvantageType) ([]int, error)
 ```
 - Normal: Roll normally
 - Advantage: Roll twice, take higher
 - Disadvantage: Roll twice, take lower
 - Handle multiple dice with advantage (each die gets advantage)
+- **Called internally by SkillCheck, AttackRoll, and SkillCheckWithDice**
+- **Public utility** - also available for direct use (saving throws, initiative, etc.)
+
+#### Unit Tests
+Test each public method with deterministic seeds.
 
 ### Phase 3: Extended Dice Systems 🌍 MULTI-SYSTEM
 **Goal**: Support other RPG systems beyond D&D 5e
