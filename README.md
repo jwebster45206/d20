@@ -198,11 +198,8 @@ const (
 // SkillCheck performs a skill check using 5e conventions (d20 + modifiers)
 func (a *Actor) SkillCheck(skill string, roller *Roller, advantage AdvantageType) (RollValue, error)
 
-// SkillCheckWithDice performs a skill check with custom dice (for other RPG systems)
-func (a *Actor) SkillCheckWithDice(skill string, roller *Roller, rollCount uint, dieFaces uint, advantage AdvantageType) (RollValue, error)
-
 // D100SkillCheck performs a percentile skill check (roll under skill value)
-func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus bool) (bool, RollValue, error)
+func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus int) (bool, RollValue, error)
 
 // AttackRoll makes an attack roll using the actor's CombatModifiers
 func (a *Actor) AttackRoll(roller *Roller, advantage AdvantageType) (RollValue, error)
@@ -230,11 +227,14 @@ The library also supports d100/percentile systems like Call of Cthulhu:
 
 #### Custom Dice Systems
 
-For maximum flexibility, use `SkillCheckWithDice` to support any RPG system:
+#### D100 System Support
 
-- **GURPS**: 3d6 roll-under system
-- **Savage Worlds**: Exploding dice mechanics
-- **Custom Games**: Any combination of dice count and faces
+The library supports d100/percentile systems like Call of Cthulhu:
+
+- **D100SkillCheck**: Roll d100, succeed if result ≤ skill value
+- **Bonus Die** (bonus > 0): Roll multiple d10s for tens digit, take the LOWEST (better chance)
+- **Penalty Die** (bonus < 0): Roll multiple d10s for tens digit, take the HIGHEST (worse chance)
+- **Combat**: Uses skill checks (Fighting, Firearms, etc.) rather than separate attack rolls
 
 ### Skill Checks
 
@@ -246,11 +246,6 @@ stealthCheck, _ := actor.SkillCheck("stealth", roller, d20.Normal)
 athleticsCheck, _ := actor.SkillCheck("athletics", roller, d20.Advantage)
 perceptionCheck, _ := actor.SkillCheck("perception", roller, d20.Disadvantage)
 
-// Custom dice systems using SkillCheckWithDice
-gurpsCheck, _ := actor.SkillCheckWithDice("stealth", roller, 3, 6, d20.Normal)    // GURPS 3d6
-savageCheck, _ := actor.SkillCheckWithDice("fighting", roller, 1, 8, d20.Normal)  // Savage Worlds d8
-customCheck, _ := actor.SkillCheckWithDice("magic", roller, 2, 12, d20.Advantage) // Custom 2d12 system
-
 // Call of Cthulhu skill checks (d100, roll under skill value)
 success, roll, _ := investigator.D100SkillCheck("stealth", roller, false)
 bonusSuccess, roll, _ := investigator.D100SkillCheck("fighting", roller, true) // bonus die
@@ -261,7 +256,9 @@ if success {
 }
 ```
 
-## 5e SRD Compliance
+## Game System Compliance
+
+### D&D 5th Edition SRD
 
 This library follows the D&D 5th Edition System Reference Document (SRD 5.2) under CC-BY licensing:
 
@@ -270,6 +267,16 @@ This library follows the D&D 5th Edition System Reference Document (SRD 5.2) und
 - **Advantage/Disadvantage**: Roll twice, take higher/lower
 - **Proficiency Bonus**: Scalable bonus system
 - **Combat Stats**: AC, HP, Initiative as per SRD
+
+### Call of Cthulhu®
+
+This library implements d100 percentile mechanics compatible with Call of Cthulhu® by Chaosium Inc:
+
+- **Percentile Skills**: Roll d100, succeed if result ≤ skill value
+- **Bonus/Penalty Dice**: Multiple d10s for tens digit, take best/worst
+- **Roll-Under System**: Success determined by rolling under skill percentage
+
+Call of Cthulhu® is a registered trademark of Chaosium Inc. This library implements compatible game mechanics but does not include copyrighted content from Call of Cthulhu sourcebooks.
 
 ## Examples
 
@@ -384,128 +391,26 @@ This is the complete implementation plan for v0 of the D20 library. We're buildi
 
 ### Phase 2: Actor Methods 🎯 CORE FEATURES
 **Goal**: Implement the main Actor functionality for D&D 5e
-
-#### 2.0 Actor Constructor
-NewActor
-
-#### 2.0 Actor Constructor & Accessors
-```go
-// actor.go
-
-// Constructors
-func NewActor(hp, ac, initiative int) (*Actor, error)
-func NewActorWithAttributes(hp, ac, init int, attrs map[string]int) (*Actor, error)
-
-// HP Management
-func (a *Actor) GetHP() int
-func (a *Actor) SetHP(hp int) error
-func (a *Actor) TakeDamage(damage int)
-func (a *Actor) Heal(amount int)
-func (a *Actor) IsAlive() bool
-
-// AC and Initiative
-func (a *Actor) GetAC() int
-func (a *Actor) SetAC(ac int) error
-func (a *Actor) GetInitiative() int
-func (a *Actor) SetInitiative(init int)
-
-// Attribute Management
-func (a *Actor) GetAttribute(key string) (int, bool)
-func (a *Actor) SetAttribute(key string, value int)
-func (a *Actor) HasAttribute(key string) bool
-func (a *Actor) RemoveAttribute(key string)
-
-// Combat Modifier Management
-func (a *Actor) AddCombatModifier(m Modifier)
-func (a *Actor) RemoveCombatModifier(reason string)
-func (a *Actor) ClearCombatModifiers()
-func (a *Actor) GetCombatModifiers() []Modifier
-```
-- Validate HP > 0, AC > 0 in constructors and setters
-- Initialize maps/slices in constructors
-- Automatically lowercase all attribute keys and modifier reasons
-- Return copies of slices/maps to prevent external mutations
-- Unit test all validation and edge cases
-
-#### 2.1 Basic Skill Checks
-```go
-// actor.go
-func (a *Actor) SkillCheck(skill string, roller *Roller, advantage AdvantageType) (RollValue, error)
-```
-- Look up skill value from Attributes map
-- Handle Normal/Advantage/Disadvantage dice rolling
-- Add skill modifier to d20 roll
-- Calls RollWithAdvantage
-- Return formatted RollValue
-
-#### 2.2 Attack Rolls
-```go
-func (a *Actor) AttackRoll(roller *Roller, advantage AdvantageType) (RollValue, error)
-func (a *Actor) AttackRollWithModifiers(roller *Roller, advantage AdvantageType, extraModifiers []Modifier) (RollValue, error)
-```
-- Use actor's CombatModifiers for base attack bonus
-- Handle advantage/disadvantage mechanics
-- Combine base and situational modifiers
-- Calls RollWithAdvantage
-- Return formatted attack roll result
-
-#### 2.3 Advantage/Disadvantage Logic
-
-```go
-func RollWithAdvantage(roller *Roller, rollCount uint, dieFaces uint, advantage AdvantageType) ([]int, error)
-```
-- Normal: Roll normally
-- Advantage: Roll twice, take higher
-- Disadvantage: Roll twice, take lower
-- Handle multiple dice with advantage (each die gets advantage)
-- **Called internally by SkillCheck, AttackRoll, and SkillCheckWithDice**
-- **Public utility** - also available for direct use (saving throws, initiative, etc.)
-
-#### Unit Tests
-Test each public method with deterministic seeds.
+**Status**: Complete
 
 ### Phase 3: Extended Dice Systems 🌍 MULTI-SYSTEM
 **Goal**: Support other RPG systems beyond D&D 5e
+**Status**: Complete
 
-#### 3.1 Flexible Skill Checks
-```go
-func (a *Actor) SkillCheckWithDice(skill string, roller *Roller, rollCount uint, dieFaces uint, advantage AdvantageType) (RollValue, error)
-```
-- Allow custom dice for any RPG system
-- GURPS 3d6, Savage Worlds variable dice, etc.
-- Reuse advantage/disadvantage logic
-
-#### 3.2 D100 System Support
+#### 3.1 D100 System Support
 ```go
 func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus bool) (bool, RollValue, error)
 ```
 - ✅ Roll d100 vs skill percentage
 - ✅ Bonus/penalty die mechanics (2d10, take better/worse tens digit)
 - ✅ Return success boolean + roll details
-- ✅ Support Call of Cthulhu mechanics
+- ✅ Support Call of Cthulhu mechanics and mention by name (if this is allowed)
+- ✅ Add Chaosium to attributions. 
 
 ### Phase 4: Testing & Polish 🧪 QUALITY
 **Goal**: Ensure reliability and usability
 
-#### 4.1 Unit Tests
-```go
-// roller_test.go, actor_test.go
-```
-- ✅ Test deterministic rolling with seeds
-- ✅ Test advantage/disadvantage mechanics
-- ✅ Test all Actor methods
-- ✅ Test edge cases (invalid skills, zero modifiers, etc.)
-- ✅ Test Bioware-style formattingulhu, GURPS)
-- ✅ Validate roll distributions are correct
-
-### Implementation Priority Order
-
-1. **Start Here**: Core types, NewRoller, basic Roll method
-2. **Essential**: SkillCheck and AttackRoll (basic D&D 5e functionality)
-3. **Important**: Advantage/disadvantage mechanics
-4. **Nice to Have**: SkillCheckWithDice (flexible systems)
-5. **Advanced**: D100SkillCheck (Call of Cthulhu support)
-6. **Final**: Comprehensive testing and polish
+Add examples and shore up unit tests if needed.
 
 ### Success Criteria for v0
 

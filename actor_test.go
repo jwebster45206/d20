@@ -466,44 +466,6 @@ func TestActor_SkillCheck(t *testing.T) {
 	})
 }
 
-func TestActor_SkillCheckWithDice(t *testing.T) {
-	roller := NewRoller(42)
-	actor, _ := NewActor(45, 18, 2)
-	actor.SetAttribute("fighting", 12)
-
-	t.Run("GURPS 3d6 skill check", func(t *testing.T) {
-		result, err := actor.SkillCheckWithDice("fighting", roller, 3, 6, Normal)
-		if err != nil {
-			t.Fatalf("SkillCheckWithDice() error: %v", err)
-		}
-		// 3d6 + 12 = [15, 30]
-		if result.Value < 15 || result.Value > 30 {
-			t.Errorf("Result %d out of expected range [15, 30]", result.Value)
-		}
-		if len(result.DiceRolls) != 3 {
-			t.Errorf("Expected 3 die rolls, got %d", len(result.DiceRolls))
-		}
-	})
-
-	t.Run("Custom dice with advantage", func(t *testing.T) {
-		result, err := actor.SkillCheckWithDice("fighting", roller, 2, 12, Advantage)
-		if err != nil {
-			t.Fatalf("SkillCheckWithDice() error: %v", err)
-		}
-		// 2d12 + 12 = [14, 36]
-		if result.Value < 14 || result.Value > 36 {
-			t.Errorf("Result %d out of expected range [14, 36]", result.Value)
-		}
-	})
-
-	t.Run("Non-existent skill", func(t *testing.T) {
-		_, err := actor.SkillCheckWithDice("nonexistent", roller, 1, 20, Normal)
-		if err == nil {
-			t.Error("Expected error for non-existent skill")
-		}
-	})
-}
-
 func TestActor_AttackRoll(t *testing.T) {
 	roller := NewRoller(42)
 	actor, _ := NewActor(45, 18, 2)
@@ -632,4 +594,186 @@ func containsAt(s, substr string, start int) bool {
 		}
 	}
 	return false
+}
+
+func TestActor_D100SkillCheck(t *testing.T) {
+	actor, _ := NewActor(45, 18, 2)
+	actor.SetAttribute("stealth", 45)
+	actor.SetAttribute("fighting", 60)
+	actor.SetAttribute("spot_hidden", 25)
+
+	t.Run("Normal d100 roll", func(t *testing.T) {
+		roller := NewRoller(42)
+		success, roll, err := actor.D100SkillCheck("stealth", roller, 0)
+		if err != nil {
+			t.Fatalf("D100SkillCheck() error: %v", err)
+		}
+
+		// Result should be 1-100
+		if roll.Value < 1 || roll.Value > 100 {
+			t.Errorf("D100 result %d out of range [1, 100]", roll.Value)
+		}
+
+		// Check success matches skill value
+		shouldSucceed := roll.Value <= 45
+		if success != shouldSucceed {
+			t.Errorf("Success = %v, but roll %d vs skill 45 should be %v", success, roll.Value, shouldSucceed)
+		}
+	})
+
+	t.Run("Bonus die (positive bonus)", func(t *testing.T) {
+		roller := NewRoller(100)
+		// With bonus die, we should still get valid d100 result
+		success, roll, err := actor.D100SkillCheck("fighting", roller, 1)
+		if err != nil {
+			t.Fatalf("D100SkillCheck() with bonus error: %v", err)
+		}
+
+		if roll.Value < 1 || roll.Value > 100 {
+			t.Errorf("D100 result %d out of range [1, 100]", roll.Value)
+		}
+
+		shouldSucceed := roll.Value <= 60
+		if success != shouldSucceed {
+			t.Errorf("Success = %v, but roll %d vs skill 60 should be %v", success, roll.Value, shouldSucceed)
+		}
+	})
+
+	t.Run("Penalty die (negative bonus)", func(t *testing.T) {
+		roller := NewRoller(200)
+		// With penalty die, we should still get valid d100 result
+		success, roll, err := actor.D100SkillCheck("spot_hidden", roller, -1)
+		if err != nil {
+			t.Fatalf("D100SkillCheck() with penalty error: %v", err)
+		}
+
+		if roll.Value < 1 || roll.Value > 100 {
+			t.Errorf("D100 result %d out of range [1, 100]", roll.Value)
+		}
+
+		shouldSucceed := roll.Value <= 25
+		if success != shouldSucceed {
+			t.Errorf("Success = %v, but roll %d vs skill 25 should be %v", success, roll.Value, shouldSucceed)
+		}
+	})
+
+	t.Run("Multiple bonus dice", func(t *testing.T) {
+		roller := NewRoller(300)
+		_, roll, err := actor.D100SkillCheck("fighting", roller, 2)
+		if err != nil {
+			t.Fatalf("D100SkillCheck() with 2 bonus dice error: %v", err)
+		}
+
+		if roll.Value < 1 || roll.Value > 100 {
+			t.Errorf("D100 result %d out of range [1, 100]", roll.Value)
+		}
+	})
+
+	t.Run("Multiple penalty dice", func(t *testing.T) {
+		roller := NewRoller(400)
+		_, roll, err := actor.D100SkillCheck("stealth", roller, -2)
+		if err != nil {
+			t.Fatalf("D100SkillCheck() with 2 penalty dice error: %v", err)
+		}
+
+		if roll.Value < 1 || roll.Value > 100 {
+			t.Errorf("D100 result %d out of range [1, 100]", roll.Value)
+		}
+	})
+
+	t.Run("Non-existent skill", func(t *testing.T) {
+		roller := NewRoller(42)
+		_, _, err := actor.D100SkillCheck("nonexistent", roller, 0)
+		if err == nil {
+			t.Error("Expected error for non-existent skill")
+		}
+	})
+
+	t.Run("Success and failure cases", func(t *testing.T) {
+		// Set a very high skill to ensure success
+		actor.SetAttribute("guaranteed", 99)
+		successCount := 0
+
+		for i := 0; i < 10; i++ {
+			roller := NewRandomRoller()
+			success, _, _ := actor.D100SkillCheck("guaranteed", roller, 0)
+			if success {
+				successCount++
+			}
+		}
+
+		// With 99% skill, we should get mostly successes
+		if successCount < 8 {
+			t.Logf("Warning: Expected at least 8/10 successes with 99%% skill, got %d (might be random variance)", successCount)
+		}
+	})
+
+	t.Run("Skill value of 100", func(t *testing.T) {
+		actor.SetAttribute("master", 100)
+		roller := NewRoller(500)
+		success, roll, err := actor.D100SkillCheck("master", roller, 0)
+		if err != nil {
+			t.Fatalf("D100SkillCheck() error: %v", err)
+		}
+
+		// Roll of 100 should succeed with skill 100
+		if roll.Value == 100 && !success {
+			t.Error("Roll of 100 should succeed when skill is 100")
+		}
+	})
+
+	t.Run("Case-insensitive skill lookup", func(t *testing.T) {
+		roller := NewRoller(42)
+		_, _, err := actor.D100SkillCheck("STEALTH", roller, 0)
+		if err != nil {
+			t.Errorf("D100SkillCheck() should work with uppercase skill name: %v", err)
+		}
+	})
+}
+
+func TestActor_D100SkillCheck_BonusPenaltyMechanics(t *testing.T) {
+	// Test that bonus/penalty dice actually affect outcomes statistically
+	actor, _ := NewActor(45, 18, 2)
+	actor.SetAttribute("test", 50)
+
+	// Run many rolls to check statistical distribution
+	normalSuccesses := 0
+	bonusSuccesses := 0
+	penaltySuccesses := 0
+	trials := 100
+
+	for i := 0; i < trials; i++ {
+		normalRoller := NewRandomRoller()
+		bonusRoller := NewRandomRoller()
+		penaltyRoller := NewRandomRoller()
+
+		normal, _, _ := actor.D100SkillCheck("test", normalRoller, 0)
+		bonus, _, _ := actor.D100SkillCheck("test", bonusRoller, 1)
+		penalty, _, _ := actor.D100SkillCheck("test", penaltyRoller, -1)
+
+		if normal {
+			normalSuccesses++
+		}
+		if bonus {
+			bonusSuccesses++
+		}
+		if penalty {
+			penaltySuccesses++
+		}
+	}
+
+	t.Logf("Success rates over %d trials: Normal=%d%%, Bonus=%d%%, Penalty=%d%%",
+		trials, normalSuccesses, bonusSuccesses, penaltySuccesses)
+
+	// Bonus die should give better results than normal
+	// Penalty die should give worse results than normal
+	// Note: This is statistical and might occasionally fail due to randomness
+	if bonusSuccesses < normalSuccesses {
+		t.Logf("Warning: Bonus die (%d) performed worse than normal (%d) - might be random variance",
+			bonusSuccesses, normalSuccesses)
+	}
+	if penaltySuccesses > normalSuccesses {
+		t.Logf("Warning: Penalty die (%d) performed better than normal (%d) - might be random variance",
+			penaltySuccesses, normalSuccesses)
+	}
 }

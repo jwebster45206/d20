@@ -225,39 +225,6 @@ func (a *Actor) SkillCheck(skill string, roller *Roller, advantage AdvantageType
 	return NewRollOutcome(1, 20, rolls, modifiers, total), nil
 }
 
-// SkillCheckWithDice performs a skill check with custom dice (for other RPG systems).
-// This allows flexibility for non-D20 systems like GURPS (3d6), Savage Worlds, etc.
-//
-// Example:
-//
-//	actor.SetAttribute("fighting", 12)
-//	result, _ := actor.SkillCheckWithDice("fighting", roller, 3, 6, d20.Normal) // GURPS 3d6
-func (a *Actor) SkillCheckWithDice(skill string, roller *Roller, rollCount uint, dieFaces uint, advantage AdvantageType) (RollOutcome, error) {
-	skillValue, exists := a.Attribute(skill)
-	if !exists {
-		return RollOutcome{}, fmt.Errorf("skill %q not found in actor attributes", skill)
-	}
-
-	// Roll dice with advantage/disadvantage
-	rolls, err := RollWithAdvantage(roller, rollCount, dieFaces, advantage)
-	if err != nil {
-		return RollOutcome{}, err
-	}
-
-	// Create modifier for the skill
-	modifiers := []Modifier{
-		{Value: skillValue, Reason: strings.ToLower(skill)},
-	}
-
-	// Calculate total
-	total := skillValue
-	for _, roll := range rolls {
-		total += roll
-	}
-
-	return NewRollOutcome(rollCount, dieFaces, rolls, modifiers, total), nil
-}
-
 // AttackRoll makes an attack roll using the actor's CombatModifiers.
 // Uses D&D 5e conventions (1d20 + combat modifiers).
 //
@@ -304,4 +271,76 @@ func (a *Actor) AttackRollWithModifiers(roller *Roller, advantage AdvantageType,
 	}
 
 	return NewRollOutcome(1, 20, rolls, allModifiers, total), nil
+}
+
+// D100SkillCheck performs a percentile skill check for d100 systems like Call of Cthulhu.
+// Returns success (rolled <= skill value), the roll outcome, and any error.
+//
+// The bonus parameter implements Call of Cthulhu's bonus/penalty die mechanic:
+//   - bonus > 0: Roll multiple d10s for tens digit, take the LOWEST (better chance)
+//   - bonus < 0: Roll multiple d10s for tens digit, take the HIGHEST (worse chance)
+//   - bonus = 0: Normal d100 roll (1d10 for tens, 1d10 for ones)
+//
+// Example:
+//
+//	actor.SetAttribute("stealth", 45)  // 45% skill
+//	success, roll, _ := actor.D100SkillCheck("stealth", roller, 0)  // Normal roll
+//	bonusSuccess, roll, _ := actor.D100SkillCheck("stealth", roller, 1)  // Bonus die
+//	penaltySuccess, roll, _ := actor.D100SkillCheck("stealth", roller, -1) // Penalty die
+func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus int) (bool, RollOutcome, error) {
+	skillValue, exists := a.Attribute(skill)
+	if !exists {
+		return false, RollOutcome{}, fmt.Errorf("skill %q not found in actor attributes", skill)
+	}
+
+	var tensDigit, onesDigit int
+
+	if bonus == 0 {
+		// Normal d100: 1d10 for tens, 1d10 for ones
+		tensDigit = (roller.rng.Intn(10)) * 10
+		onesDigit = roller.rng.Intn(10)
+	} else if bonus > 0 {
+		// Bonus die: Roll (1 + bonus) d10s for tens, take LOWEST
+		rolls := bonus + 1
+		bestTens := 9 // Start with worst
+		for i := 0; i < rolls; i++ {
+			roll := roller.rng.Intn(10)
+			if roll < bestTens {
+				bestTens = roll
+			}
+		}
+		tensDigit = bestTens * 10
+		onesDigit = roller.rng.Intn(10)
+	} else { // bonus < 0
+		// Penalty die: Roll (1 + |bonus|) d10s for tens, take HIGHEST
+		rolls := -bonus + 1
+		worstTens := 0 // Start with best
+		for i := 0; i < rolls; i++ {
+			roll := roller.rng.Intn(10)
+			if roll > worstTens {
+				worstTens = roll
+			}
+		}
+		tensDigit = worstTens * 10
+		onesDigit = roller.rng.Intn(10)
+	}
+
+	// Calculate final d100 result (00 = 100)
+	result := tensDigit + onesDigit
+	if result == 0 {
+		result = 100
+	}
+
+	// Success if rolled <= skill value
+	success := result <= skillValue
+
+	// Create roll outcome with skill modifier shown
+	rolls := []int{result}
+	modifiers := []Modifier{
+		{Value: skillValue, Reason: fmt.Sprintf("%s (target)", strings.ToLower(skill))},
+	}
+
+	outcome := NewRollOutcome(1, 100, rolls, modifiers, result)
+
+	return success, outcome, nil
 }
