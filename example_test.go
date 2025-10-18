@@ -28,7 +28,7 @@ func ExampleRoller_Roll() {
 	roller := d20.NewRoller(42)
 	result, _ := roller.Roll(1, 20, nil)
 	fmt.Println(result.Detail)
-	// Output: Rolled 1d20...; values 6; *Result: 6*
+	// Output: Rolled 1d20... 6; *Result: 6*
 }
 
 // ExampleRoller_Roll_withModifiers demonstrates rolling with multiple modifiers.
@@ -39,7 +39,7 @@ func ExampleRoller_Roll_withModifiers() {
 		d20.NewModifier(2, "Proficiency"),
 	})
 	fmt.Println(result.Detail)
-	// Output: Rolled 2d6...; values 6, 6; +3 strength, +2 proficiency; *Result: 17*
+	// Output: Rolled 2d6... 6, 6; +3 strength, +2 proficiency; *Result: 17*
 }
 
 // ExampleRoller_Roll_damage demonstrates a damage roll.
@@ -49,7 +49,7 @@ func ExampleRoller_Roll_damage() {
 		d20.NewModifier(4, "Strength"),
 	})
 	fmt.Println(result.Detail)
-	// Output: Rolled 2d8...; values 4, 2; +4 strength; *Result: 10*
+	// Output: Rolled 2d8... 4, 2; +4 strength; *Result: 10*
 }
 
 // ExampleNewActor demonstrates creating a basic actor.
@@ -87,7 +87,7 @@ func ExampleActor_SkillCheck() {
 
 	result, _ := rogue.SkillCheck("stealth", roller, d20.Normal)
 	fmt.Println(result.Detail)
-	// Output: Rolled 1d20...; values 6; +9 stealth; *Result: 15*
+	// Output: Rolled 1d20... 6; +9 stealth; *Result: 15*
 }
 
 // ExampleActor_SkillCheck_advantage demonstrates skill check with advantage.
@@ -98,7 +98,7 @@ func ExampleActor_SkillCheck_advantage() {
 
 	result, _ := barbarian.SkillCheck("athletics", roller, d20.Advantage)
 	fmt.Println(result.Detail)
-	// Output: Rolled 1d20...; values 9; +7 athletics; *Result: 16*
+	// Output: Rolled 1d20... 9; +7 athletics; *Result: 16*
 }
 
 // ExampleActor_SkillCheck_disadvantage demonstrates skill check with disadvantage.
@@ -109,7 +109,7 @@ func ExampleActor_SkillCheck_disadvantage() {
 
 	result, _ := barbarian.SkillCheck("stealth", roller, d20.Disadvantage)
 	fmt.Println(result.Detail)
-	// Output: Rolled 1d20...; values 4; +0 stealth; *Result: 4*
+	// Output: Rolled 1d20... 4; +0 stealth; *Result: 4*
 }
 
 // ExampleActor_D100SkillCheck demonstrates a Call of Cthulhu percentile skill check.
@@ -157,7 +157,7 @@ func ExampleActor_AttackRoll() {
 
 	result, _ := fighter.AttackRoll(roller, d20.Normal)
 	fmt.Println(result.Detail)
-	// Output: Rolled 1d20...; values 6; +3 strength, +3 proficiency; *Result: 12*
+	// Output: Rolled 1d20... 6; +3 strength, +3 proficiency; *Result: 12*
 }
 
 // ExampleActor_AttackRoll_advantage demonstrates attack with advantage.
@@ -169,7 +169,7 @@ func ExampleActor_AttackRoll_advantage() {
 
 	result, _ := ranger.AttackRoll(roller, d20.Advantage)
 	fmt.Println(result.Detail)
-	// Output: Rolled 1d20...; values 9; +4 dexterity, +3 proficiency; *Result: 16*
+	// Output: Rolled 1d20... 9; +4 dexterity, +3 proficiency; *Result: 16*
 }
 
 // ExampleActor_AttackRollWithModifiers demonstrates attack with situational modifiers.
@@ -184,7 +184,7 @@ func ExampleActor_AttackRollWithModifiers() {
 		d20.NewModifier(1, "Magic Weapon"),
 	})
 	fmt.Println(result.Detail)
-	// Output: Rolled 1d20...; values 6; +4 strength, +4 proficiency, +2 bless, +1 magic weapon; *Result: 17*
+	// Output: Rolled 1d20... 6; +4 strength, +4 proficiency, +2 bless, +1 magic weapon; *Result: 17*
 }
 
 // ExampleActor_SubHP demonstrates HP tracking with damage and healing.

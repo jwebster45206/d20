@@ -43,7 +43,7 @@ func main() {
     }
     
     fmt.Println(result.Detail)
-    // Rolled 2d20...; values 16, 12; +3 strength, +2 proficiency; *Result: 33*
+    // Rolled 2d20... 16, 12; +3 strength, +2 proficiency; *Result: 33*
 }
 ```
 
@@ -91,7 +91,7 @@ type RollValue struct {
 ```
 
 The `Detail` field provides a Bioware-style formatted string showing the complete roll breakdown:
-- `Rolled 2d20...; values 16, 12; +3 strength, +2 proficiency; *Result: 33*`
+- `Rolled 2d20... 16, 12; +3 strength, +2 proficiency; *Result: 33*`
 
 ## Actor System
 

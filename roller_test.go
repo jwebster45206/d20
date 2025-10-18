@@ -211,7 +211,7 @@ func TestFormatRollDetail_Basic(t *testing.T) {
 	if !strings.Contains(detail, "Rolled 1d20...") {
 		t.Error("Detail should contain rolled dice notation")
 	}
-	if !strings.Contains(detail, "values 15") {
+	if !strings.Contains(detail, " 15") {
 		t.Error("Detail should contain die value")
 	}
 	if !strings.Contains(detail, "*Result: 15*") {
@@ -229,7 +229,7 @@ func TestFormatRollDetail_WithModifiers(t *testing.T) {
 	if !strings.Contains(detail, "Rolled 2d20...") {
 		t.Error("Detail should contain rolled dice notation")
 	}
-	if !strings.Contains(detail, "values 16, 12") {
+	if !strings.Contains(detail, " 16, 12") {
 		t.Error("Detail should contain die values")
 	}
 	if !strings.Contains(detail, "+3 strength") {
