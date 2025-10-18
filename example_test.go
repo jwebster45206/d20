@@ -215,7 +215,7 @@ func ExampleActor_SetMaxHP() {
 	fmt.Printf("Level 4: %d/%d HP\n", wizard.HP(), wizard.MaxHP())
 
 	// Level up to level 5 - current HP stays at 22
-	wizard.SetMaxHP(27)
+	_ = wizard.SetMaxHP(27)
 	fmt.Printf("Level 5: %d/%d HP\n", wizard.HP(), wizard.MaxHP())
 
 	// After a long rest
