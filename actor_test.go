@@ -212,8 +212,8 @@ func TestActor_SetMaxHP(t *testing.T) {
 	}
 
 	// Current HP adjusted if exceeds new max
-	actor.SetHP(30)
-	actor.SetMaxHP(15)
+	_ = actor.SetHP(30)
+	_ = actor.SetMaxHP(15)
 	if actor.HP() != 15 {
 		t.Errorf("Expected HP adjusted to 15, got %d", actor.HP())
 	}
@@ -238,7 +238,7 @@ func TestActor_SubHP(t *testing.T) {
 // Test Actor.AddHP
 func TestActor_AddHP(t *testing.T) {
 	actor, _ := NewActor("hero", 20, 15).Build()
-	actor.SetHP(10)
+	_ = actor.SetHP(10)
 
 	actor.AddHP(5)
 	if actor.HP() != 15 {
@@ -255,7 +255,7 @@ func TestActor_AddHP(t *testing.T) {
 // Test Actor.ResetHP
 func TestActor_ResetHP(t *testing.T) {
 	actor, _ := NewActor("hero", 20, 15).Build()
-	actor.SetHP(5)
+	_ = actor.SetHP(5)
 
 	actor.ResetHP()
 	if actor.HP() != 20 {
@@ -271,7 +271,7 @@ func TestActor_IsKnockedOut(t *testing.T) {
 		t.Error("Expected not knocked out at full HP")
 	}
 
-	actor.SetHP(0)
+	_ = actor.SetHP(0)
 	if !actor.IsKnockedOut() {
 		t.Error("Expected knocked out at 0 HP")
 	}
