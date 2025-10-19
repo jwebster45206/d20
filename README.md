@@ -7,17 +7,11 @@ A Go library for dice rolling and D20 system mechanics, designed with 5e SRD com
 
 ## Features
 
-- **Flexible Dice Rolling**: Support for any dice combination with modifiers
+- **Dice Shorthand**: Parse standard string notation like "1d20+3" or "2d6"
+- **Dice Longhand**: Fluent builder API with support for all dice combinations, named modifiers, and advantage/disadvantage
 - **5e SRD Compatible**: Follows D&D 5th Edition System Reference Document conventions
 - **Actor System**: Basic character/creature representation for combat and skill checks
-- **Detailed Roll Results**: Bioware-style roll result formatting with full breakdowns
-- **Extensible Design**: Clean interfaces for future expansion
-
-## Installation
-
-```bash
-go get github.com/jwebster45206/d20
-```
+- **Detailed Roll Results**: Bioware-inspired roll result formatting with full breakdowns
 
 ## Quick Start
 
@@ -31,9 +25,13 @@ import (
 
 func main() {
     // Create a roller
-    roller := d20.NewRoller(42) // seed for reproducible results
+    roller := d20.NewRandomRoller()
     
-    // Roll some dice with fluent API
+    // Simple dice notation shorthand
+    result, _ := roller.Roll("1d20+3")
+    fmt.Printf("Attack roll: %d\n", result.Value)
+    
+    // Or use the fluent API for more control and named modifiers
     result, err := roller.Dice(1, 20).
         WithModifier("strength", 3).
         WithModifier("proficiency", 2).
@@ -50,6 +48,14 @@ func main() {
         WithModifier("dexterity", 4).
         Roll()
     fmt.Printf("Roll: %d (dice: %v)\n", advResult.Value, advResult.DiceRolls)
+    
+    // Roll and display detailed results
+    detailResult, _ := roller.Dice(1, 20).
+        WithModifier("strength", 3).
+        WithModifier("proficiency", 2).
+        Roll()
+    fmt.Println(detailResult.Detail)
+    // Output: Rolled 1d20: 17 | +3 strength | +2 proficiency | Total: 22
 }
 ```
 
@@ -57,14 +63,17 @@ func main() {
 
 ### Roller & RollBuilder
 
-The `Roller` provides dice rolling functionality through a fluent builder API:
+The `Roller` provides dice rolling functionality through both a fluent builder API and simple dice notation:
 
 ```go
 // Create a roller
 func NewRoller(seed int64) *Roller
 func NewRandomRoller() *Roller
 
-// Start building a roll
+// Dice notation shorthand - simple and fast
+func (r *Roller) Roll(notation string) (RollOutcome, error)
+
+// Start building a roll - for complex scenarios
 func (r *Roller) Dice(rollCount, dieFaces int) *RollBuilder
 
 // RollBuilder - fluent API for configuring rolls
@@ -77,6 +86,15 @@ func (rb *RollBuilder) WithDisadvantage() *RollBuilder
 func (rb *RollBuilder) Normal() *RollBuilder
 func (rb *RollBuilder) Roll() (*RollOutcome, error)
 ```
+
+**Dice Notation Shorthand:**
+
+The `Roll()` method accepts standard dice notation strings:
+- `"1d20"` - Roll one 20-sided die
+- `"d20"` - Shorthand for 1d20
+- `"2d6+3"` - Roll two 6-sided dice and add 3
+- `"3d8-2"` - Roll three 8-sided dice and subtract 2
+- `"1d100"` - Percentile dice
 
 **Advantage/Disadvantage Mechanics:**
 - **Advantage**: Rolls 2 dice, uses the higher value, returns both in `DiceRolls`
@@ -139,7 +157,7 @@ func (a *Actor) SetAC(ac int)
 func (a *Actor) Initiative() int
 func (a *Actor) SetInitiative(init int)
 
-// Attribute Management (keys automatically lowercased and snake_cased)
+// Attribute Management 
 func (a *Actor) Attribute(key string) (int, bool)
 func (a *Actor) SetAttribute(key string, value int)
 func (a *Actor) HasAttribute(key string) bool
@@ -147,23 +165,15 @@ func (a *Actor) RemoveAttribute(key string)
 func (a *Actor) IncrementAttribute(key string, amount int)
 func (a *Actor) DecrementAttribute(key string, amount int)
 
-// Combat Modifier Management (names automatically lowercased)
+// Combat Modifier Management 
 func (a *Actor) AddCombatModifier(name string, value int)
 func (a *Actor) RemoveCombatModifier(name string)
 
-// Roll Methods - return RollBuilder for further configuration
+// Roll Methods
 func (a *Actor) SkillCheck(skill string, roller *Roller) (*RollBuilder, error)
 func (a *Actor) AttackRoll(roller *Roller) *RollBuilder
 func (a *Actor) D100SkillCheck(skill string, roller *Roller) (bool, *RollOutcome, error)
 ```
-
-**Design Notes**: Actor uses private fields with accessor methods and a builder pattern to:
-- Provide a fluent, discoverable API for construction
-- Track both maximum and current HP separately
-- Enforce data validation (HP and AC must be positive)
-- Automatically normalize IDs to snake_case (e.g., "Goblin King" → "goblin_king")
-- Return `*RollBuilder` from roll methods for flexible configuration
-- Support method chaining for intuitive actor creation
 
 ### Creating Actors
 
@@ -171,10 +181,10 @@ Use the builder pattern to create actors with optional configuration:
 
 ```go
 // Basic actor
-fighter, _ := d20.NewActor("Aragorn", 45, 18).Build()
+fighter, _ := d20.NewActor("Ironpants", 45, 18).Build()
 
 // Actor with attributes and modifiers
-wizard, _ := d20.NewActor("Gandalf", 38, 14).
+wizard, _ := d20.NewActor("Merlin", 38, 14).
     WithInitiative(3).
     WithAttributes(map[string]int{
         "intelligence": 18,
@@ -204,8 +214,6 @@ Common combat modifiers include:
 - **Equipment Bonuses**: Magic weapon bonuses (+1, +2, +3 weapons)
 - **Spell Effects**: Bless, Guidance, or other temporary bonuses
 - **Class Features**: Fighting styles, rage bonuses, etc.
-
-Note: AC represents the actor's total Armor Class including all static bonuses (armor, shields, Dex modifier, natural armor, etc.). Situational AC modifiers (cover, spells) can be added when rolling.
 
 ### Attributes
 
@@ -323,8 +331,18 @@ Call of Cthulhu® is a registered trademark of Chaosium Inc. This library implem
 ```go
 roller := d20.NewRoller(time.Now().UnixNano())
 
-// Simple d20 roll
-result, _ := roller.Dice(1, 20).Roll()
+// Dice notation shorthand - quick and simple
+result, _ := roller.Roll("1d20")
+fmt.Printf("Rolled: %d\n", result.Value)
+
+result, _ = roller.Roll("d20+5")
+fmt.Printf("With modifier: %d\n", result.Value)
+
+result, _ = roller.Roll("2d6+3")
+fmt.Printf("Damage: %d\n", result.Value)
+
+// Fluent API - more control and options
+result, _ = roller.Dice(1, 20).Roll()
 fmt.Printf("Rolled: %d\n", result.Value)
 
 // Attack roll with modifiers
@@ -363,7 +381,7 @@ fmt.Printf("Roll: %d (from dice: %v)\n", result.Value, result.DiceRolls)
 roller := d20.NewRoller(time.Now().UnixNano())
 
 // Create a character using the builder pattern
-fighter, _ := d20.NewActor("Aragorn", 45, 18).
+fighter, _ := d20.NewActor("Ironpants", 45, 18).
     WithInitiative(2).
     WithAttributes(map[string]int{
         "strength":     16,
@@ -380,7 +398,7 @@ fighter, _ := d20.NewActor("Aragorn", 45, 18).
     Build()
 
 // Or create a simple actor and modify it
-wizard, _ := d20.NewActor("Gandalf", 22, 12).
+wizard, _ := d20.NewActor("Merlin", 22, 12).
     WithInitiative(3).
     Build()
 
@@ -420,9 +438,9 @@ fighter.AddHP(8)
 fighter.SetMaxHP(50)
 fighter.ResetHP() // Full heal after rest
 
-// Temporary attribute buffs/debuffs
-fighter.IncrementAttribute("strength", 2)  // Bull's Strength spell
-fighter.DecrementAttribute("dexterity", 1) // Exhaustion
+// Attribute changes
+fighter.IncrementAttribute("strength", 2) 
+fighter.DecrementAttribute("dexterity", 1) 
 ```
 
 ### D100 System Usage
@@ -435,8 +453,13 @@ investigator, _ := d20.NewActor("Detective Morgan", 12, 10).
         "fighting":    60,  // 60% skill  
         "firearms":    25,  // 25% skill
         "spot_hidden": 70,  // 70% skill
+        "sanity":      65,  // Current sanity points
     }).
     Build()
+
+// Attribute changes - sanity loss and recovery
+investigator.IncrementAttribute("sanity", 1)  // Therapy or rest
+investigator.DecrementAttribute("sanity", 3)  // Witnessed something horrifying     
 
 // Perform d100 skill checks
 success, outcome, _ := investigator.D100SkillCheck("stealth", roller)
@@ -450,71 +473,6 @@ if success {
 // Combat using Fighting skill
 success, outcome, _ = investigator.D100SkillCheck("fighting", roller)
 ```
-
-
-## Migration Guide
-
-If you're upgrading from an earlier version of this library, here's how to migrate to the new fluent API:
-
-### Dice Rolling Changes
-
-**Old API:**
-```go
-result, _ := roller.Roll(1, 20, []d20.Modifier{
-    {Value: 3, Reason: "Strength"},
-    {Value: 2, Reason: "Proficiency"},
-})
-```
-
-**New API:**
-```go
-result, _ := roller.Dice(1, 20).
-    WithModifier("strength", 3).
-    WithModifier("proficiency", 2).
-    Roll()
-```
-
-### Actor Creation Changes
-
-**Old API:**
-```go
-actor, _ := d20.NewActor(45, 18, 2)
-actor.SetAttribute("strength", 16)
-actor.AddCombatModifier(d20.Modifier{Value: 3, Reason: "Strength"})
-```
-
-**New API:**
-```go
-actor, _ := d20.NewActor("Fighter", 45, 18).
-    WithInitiative(2).
-    WithAttribute("strength", 16).
-    WithCombatModifier("strength", 3).
-    Build()
-```
-
-### Attack and Skill Check Changes
-
-**Old API:**
-```go
-result, _ := actor.AttackRoll(roller, d20.Advantage)
-result, _ := actor.SkillCheck("stealth", roller, d20.Normal)
-```
-
-**New API:**
-```go
-result, _ := actor.AttackRoll(roller).WithAdvantage().Roll()
-
-builder, _ := actor.SkillCheck("stealth", roller)
-result, _ = builder.Roll()
-```
-
-### Key Benefits of New API
-
-1. **Method Chaining**: Build complex rolls step-by-step with clear intent
-2. **Transparency**: Advantage/disadvantage now returns all dice rolled
-3. **Flexibility**: Add modifiers conditionally without rebuilding arrays
-4. **Readability**: Named modifiers instead of Modifier structs
-5. **Normalized IDs**: Actors now have human-readable IDs that auto-normalize
 
 ## References
 
