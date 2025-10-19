@@ -115,7 +115,7 @@ func (ab *ActorBuilder) WithAttributes(attrs map[string]int) *ActorBuilder {
 //
 //	actor := d20.NewActor("fighter", 45, 18).WithCombatModifier("strength", 3).Build()
 func (ab *ActorBuilder) WithCombatModifier(name string, value int) *ActorBuilder {
-	ab.combatModifiers = append(ab.combatModifiers, NewModifier(value, name))
+	ab.combatModifiers = append(ab.combatModifiers, NewModifier(name, value))
 	return ab
 }
 
@@ -129,7 +129,7 @@ func (ab *ActorBuilder) WithCombatModifier(name string, value int) *ActorBuilder
 //	actor := d20.NewActor("fighter", 45, 18).WithCombatModifiers(mods).Build()
 func (ab *ActorBuilder) WithCombatModifiers(mods map[string]int) *ActorBuilder {
 	for name, value := range mods {
-		ab.combatModifiers = append(ab.combatModifiers, NewModifier(value, name))
+		ab.combatModifiers = append(ab.combatModifiers, NewModifier(name, value))
 	}
 	return ab
 }
@@ -323,7 +323,7 @@ func (a *Actor) DecrementAttribute(key string, delta int) {
 //	actor.AddCombatModifier("strength", 3)
 //	actor.AddCombatModifier("bless", 2)
 func (a *Actor) AddCombatModifier(name string, value int) {
-	a.combatModifiers = append(a.combatModifiers, NewModifier(value, name))
+	a.combatModifiers = append(a.combatModifiers, NewModifier(name, value))
 }
 
 // RemoveCombatModifier removes all modifiers with the specified reason.

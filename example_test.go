@@ -16,6 +16,33 @@ func Example_basicRoll() {
 	// Rolled: 6
 }
 
+// Example_diceNotation shows using dice notation shorthand.
+func Example_diceNotation() {
+	roller := d20.NewRoller(42)
+
+	// Simple notation
+	result, _ := roller.Roll("1d20")
+	fmt.Printf("1d20: %d\n", result.Value)
+
+	// Shorthand (assumes 1d)
+	result, _ = roller.Roll("d20")
+	fmt.Printf("d20: %d\n", result.Value)
+
+	// With modifier
+	result, _ = roller.Roll("1d20+3")
+	fmt.Printf("1d20+3: %d\n", result.Value)
+
+	// Multiple dice
+	result, _ = roller.Roll("2d6+2")
+	fmt.Printf("2d6+2: %d\n", result.Value)
+
+	// Output:
+	// 1d20: 6
+	// d20: 8
+	// 1d20+3: 12
+	// 2d6+2: 5
+}
+
 // Example_rollWithModifier shows adding a single modifier.
 func Example_rollWithModifier() {
 	roller := d20.NewRoller(42)

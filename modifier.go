@@ -12,7 +12,7 @@ type Modifier struct {
 
 // NewModifier creates a new Modifier with the reason automatically lowercased
 // for consistent formatting. This is the recommended way to create modifiers.
-func NewModifier(value int, reason string) Modifier {
+func NewModifier(reason string, value int) Modifier {
 	return Modifier{
 		Value:  value,
 		Reason: strings.ToLower(reason),

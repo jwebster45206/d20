@@ -2,7 +2,11 @@ package d20
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -37,9 +41,70 @@ func NewRandomRoller() *Roller {
 }
 
 var (
-	errRollCountZero = errors.New("rollCount must be greater than 0")
-	errDieFacesZero  = errors.New("dieFaces must be greater than 0")
+	errRollCountZero       = errors.New("rollCount must be greater than 0")
+	errDieFacesZero        = errors.New("dieFaces must be greater than 0")
+	errInvalidDiceNotation = errors.New("invalid dice notation format")
 )
+
+// diceNotationRegex matches patterns like: 1d20, 2d6+3, 3d8-2, d20+5
+var diceNotationRegex = regexp.MustCompile(`^(\d*)d(\d+)(([+-])(\d+))?$`)
+
+// Roll provides a simple shorthand API for rolling dice using standard dice notation.
+// Accepts strings like "1d20", "2d6+3", "3d8-2", or "d20" (assumes 1d20).
+// This is a convenience method that doesn't use the fluent API.
+//
+// Examples:
+//   - "1d20" - Roll one 20-sided die
+//   - "2d6+3" - Roll two 6-sided dice and add 3
+//   - "3d8-2" - Roll three 8-sided dice and subtract 2
+//   - "d20" - Roll one 20-sided die (shorthand)
+//
+// Returns a RollOutcome with the result, or an error if the notation is invalid.
+func (r *Roller) Roll(notation string) (RollOutcome, error) {
+	notation = strings.TrimSpace(strings.ToLower(notation))
+
+	matches := diceNotationRegex.FindStringSubmatch(notation)
+	if matches == nil {
+		return RollOutcome{}, fmt.Errorf("%w: %s", errInvalidDiceNotation, notation)
+	}
+
+	// Parse roll count (default to 1 if not specified)
+	rollCount := uint(1)
+	if matches[1] != "" {
+		count, err := strconv.Atoi(matches[1])
+		if err != nil || count <= 0 {
+			return RollOutcome{}, fmt.Errorf("%w: invalid roll count", errInvalidDiceNotation)
+		}
+		rollCount = uint(count)
+	}
+
+	// Parse die faces
+	dieFaces, err := strconv.Atoi(matches[2])
+	if err != nil || dieFaces <= 0 {
+		return RollOutcome{}, fmt.Errorf("%w: invalid die faces", errInvalidDiceNotation)
+	}
+
+	// Parse modifier (if present)
+	var modifiers []Modifier
+	if matches[3] != "" {
+		modValue, err := strconv.Atoi(matches[5])
+		if err != nil {
+			return RollOutcome{}, fmt.Errorf("%w: invalid modifier value", errInvalidDiceNotation)
+		}
+		if matches[4] == "-" {
+			modValue = -modValue
+		}
+		modifiers = append(modifiers, NewModifier("modifier", modValue))
+	}
+
+	// Use the fluent API internally
+	builder := r.Dice(rollCount, uint(dieFaces))
+	for _, mod := range modifiers {
+		builder = builder.WithModifier(mod.Reason, mod.Value)
+	}
+
+	return builder.Roll()
+}
 
 // Dice starts building a dice roll with the specified count and faces.
 // This is the entry point for the fluent API.
@@ -64,7 +129,7 @@ func (r *Roller) Dice(rollCount uint, dieFaces uint) *RollBuilder {
 //
 //	roller.Dice(1, 20).WithModifier("strength", 3).WithModifier("proficiency", 2).Roll()
 func (rb *RollBuilder) WithModifier(name string, value int) *RollBuilder {
-	rb.modifiers = append(rb.modifiers, NewModifier(value, name))
+	rb.modifiers = append(rb.modifiers, NewModifier(name, value))
 	return rb
 }
 
@@ -77,7 +142,7 @@ func (rb *RollBuilder) WithModifier(name string, value int) *RollBuilder {
 //	roller.Dice(1, 20).WithModifiers(mods).Roll()
 func (rb *RollBuilder) WithModifiers(modifiers map[string]int) *RollBuilder {
 	for name, value := range modifiers {
-		rb.modifiers = append(rb.modifiers, NewModifier(value, name))
+		rb.modifiers = append(rb.modifiers, NewModifier(name, value))
 	}
 	return rb
 }
@@ -120,7 +185,7 @@ func (rb *RollBuilder) Normal() *RollBuilder {
 //
 // Example:
 //
-//	result, err := roller.Dice(2, 6).WithModifier("strength", 3).Roll()
+//	result, err  := roller.Dice(2, 6).WithModifier("strength", 3).Roll()
 func (rb *RollBuilder) Roll() (RollOutcome, error) {
 	if rb.rollCount == 0 {
 		return RollOutcome{}, errRollCountZero
