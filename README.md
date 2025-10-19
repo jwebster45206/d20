@@ -55,7 +55,7 @@ func main() {
         WithModifier("proficiency", 2).
         Roll()
     fmt.Println(detailResult.Detail)
-    // Output: Rolled 1d20: 17 | +3 strength | +2 proficiency | Total: 22
+    // Example: "Rolled 1d20... 15; +3 strength, +2 proficiency; *Result: 20*"
 }
 ```
 
@@ -116,9 +116,9 @@ type RollOutcome struct {
 ```
 
 **Examples:**
-- Normal roll: `DiceRolls: [17]`, `Detail: "Rolled 1d20: 17"`
-- With advantage: `DiceRolls: [6, 8]`, `Value: 8`, `Detail: "Rolled 1d20 with advantage: 6, 8 (took 8)"`
-- With modifiers: `Detail: "Rolled 1d20: 6 | +3 strength | Total: 9"`
+- Normal roll: `DiceRolls: [17]`, `Detail: "Rolled 1d20... 17; *Result: 17*"`
+- With advantage: `DiceRolls: [6, 8]`, `Value: 8`, `Detail: "Rolled 1d20... 6, 8; *Result: 8*"`
+- With modifiers: `Detail: "Rolled 1d20... 6; +3 strength; *Result: 9*"`
 
 ## Actor System
 
