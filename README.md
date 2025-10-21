@@ -223,7 +223,7 @@ barbarian, _ := d20.NewActor("Grog").
 ```
 
 **Rolled Stats**: Use `WithRoller()` to enable dice rolling during character creation. This is perfect for:
-- Traditional ability score rolling (3d6, or 4d6 keep highest 3 as a variant)
+- Traditional ability score rolling
 - Random HP generation
 - Variable starting stats
 - Quick NPC generation
@@ -625,8 +625,6 @@ Currently, the dice notation parser supports basic formats like `"1d20"`, `"2d6+
 - `kl` (keep lowest): `"4d6kl3"` - Roll 4d6, keep lowest 3
 - `dh` (drop highest): `"4d6dh1"` - Roll 4d6, drop highest 1
 - `dl` (drop lowest): `"4d6dl1"` - Roll 4d6, drop lowest 1 (equivalent to kh3)
-
-This would allow more expressive character generation methods while maintaining compatibility with the existing API.
 
 ## References
 
