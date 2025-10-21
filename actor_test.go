@@ -6,7 +6,7 @@ import (
 
 // Test ActorBuilder - NewActor and Build
 func TestActorBuilder_NewActorAndBuild(t *testing.T) {
-	actor, err := NewActor("TEST-ACTOR", 20, 15).Build()
+	actor, err := NewActor("TEST-ACTOR").WithHP(20).WithAC(15).Build()
 	if err != nil {
 		t.Fatalf("Build() error: %v", err)
 	}
@@ -32,32 +32,17 @@ func TestActorBuilder_NewActorAndBuild(t *testing.T) {
 // Test ActorBuilder validation
 func TestActorBuilder_BuildValidation(t *testing.T) {
 	// HP must be > 0
-	_, err := NewActor("test", 0, 15).Build()
+	_, err := NewActor("test").Build()
 	if err == nil {
 		t.Error("Expected error for HP <= 0, got nil")
-	}
-
-	// AC must be > 0
-	_, err = NewActor("test", 20, 0).Build()
-	if err == nil {
-		t.Error("Expected error for AC <= 0, got nil")
-	}
-}
-
-// Test ActorBuilder.WithInitiative
-func TestActorBuilder_WithInitiative(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).
-		WithInitiative(3).
-		Build()
-
-	if actor.Initiative() != 3 {
-		t.Errorf("Expected initiative 3, got %d", actor.Initiative())
 	}
 }
 
 // Test ActorBuilder.WithAttribute
 func TestActorBuilder_WithAttribute(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
 		WithAttribute("Strength", 16).
 		WithAttribute("DEX", 14).
 		Build()
@@ -81,7 +66,9 @@ func TestActorBuilder_WithAttributes(t *testing.T) {
 		"DEXTERITY":    14,
 		"constitution": 15,
 	}
-	actor, _ := NewActor("hero", 20, 15).
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
 		WithAttributes(attrs).
 		Build()
 
@@ -104,7 +91,9 @@ func TestActorBuilder_WithAttributes(t *testing.T) {
 
 // Test ActorBuilder.WithCombatModifier
 func TestActorBuilder_WithCombatModifier(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
 		WithCombatModifier("flanking", 2).
 		WithCombatModifier("bless", 1).
 		Build()
@@ -132,7 +121,9 @@ func TestActorBuilder_WithCombatModifiers(t *testing.T) {
 		"Flanking": 2,
 		"BLESS":    1,
 	}
-	actor, _ := NewActor("hero", 20, 15).
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
 		WithCombatModifiers(mods).
 		Build()
 
@@ -158,7 +149,7 @@ func TestActor_IDNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			actor, _ := NewActor(tt.input, 20, 15).Build()
+			actor, _ := NewActor(tt.input).WithHP(10).WithAC(10).Build()
 			if actor.ID() != tt.expected {
 				t.Errorf("Expected ID '%s', got '%s'", tt.expected, actor.ID())
 			}
@@ -168,7 +159,10 @@ func TestActor_IDNormalization(t *testing.T) {
 
 // Test Actor.SetHP
 func TestActor_SetHP(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	// Valid HP change
 	err := actor.SetHP(10)
@@ -194,7 +188,10 @@ func TestActor_SetHP(t *testing.T) {
 
 // Test Actor.SetMaxHP
 func TestActor_SetMaxHP(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	// Valid max HP change
 	err := actor.SetMaxHP(30)
@@ -221,7 +218,10 @@ func TestActor_SetMaxHP(t *testing.T) {
 
 // Test Actor.SubHP
 func TestActor_SubHP(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	actor.SubHP(5)
 	if actor.HP() != 15 {
@@ -237,7 +237,10 @@ func TestActor_SubHP(t *testing.T) {
 
 // Test Actor.AddHP
 func TestActor_AddHP(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 	_ = actor.SetHP(10)
 
 	actor.AddHP(5)
@@ -254,7 +257,10 @@ func TestActor_AddHP(t *testing.T) {
 
 // Test Actor.ResetHP
 func TestActor_ResetHP(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 	_ = actor.SetHP(5)
 
 	actor.ResetHP()
@@ -265,7 +271,10 @@ func TestActor_ResetHP(t *testing.T) {
 
 // Test Actor.IsKnockedOut
 func TestActor_IsKnockedOut(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	if actor.IsKnockedOut() {
 		t.Error("Expected not knocked out at full HP")
@@ -279,7 +288,10 @@ func TestActor_IsKnockedOut(t *testing.T) {
 
 // Test Actor.SetAC
 func TestActor_SetAC(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	err := actor.SetAC(18)
 	if err != nil {
@@ -298,7 +310,10 @@ func TestActor_SetAC(t *testing.T) {
 
 // Test Actor.SetInitiative
 func TestActor_SetInitiative(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	actor.SetInitiative(5)
 	if actor.Initiative() != 5 {
@@ -308,7 +323,10 @@ func TestActor_SetInitiative(t *testing.T) {
 
 // Test Actor.Attribute and SetAttribute
 func TestActor_AttributeAndSetAttribute(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	// Initially no attributes
 	_, exists := actor.Attribute("strength")
@@ -326,7 +344,10 @@ func TestActor_AttributeAndSetAttribute(t *testing.T) {
 
 // Test Actor.HasAttribute
 func TestActor_HasAttribute(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	if actor.HasAttribute("strength") {
 		t.Error("Expected no strength attribute initially")
@@ -340,7 +361,10 @@ func TestActor_HasAttribute(t *testing.T) {
 
 // Test Actor.RemoveAttribute
 func TestActor_RemoveAttribute(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 	actor.SetAttribute("strength", 16)
 
 	actor.RemoveAttribute("strength")
@@ -351,7 +375,10 @@ func TestActor_RemoveAttribute(t *testing.T) {
 
 // Test Actor.IncrementAttribute
 func TestActor_IncrementAttribute(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 	actor.SetAttribute("strength", 16)
 
 	actor.IncrementAttribute("strength", 2)
@@ -370,7 +397,10 @@ func TestActor_IncrementAttribute(t *testing.T) {
 
 // Test Actor.DecrementAttribute
 func TestActor_DecrementAttribute(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 	actor.SetAttribute("strength", 16)
 
 	actor.DecrementAttribute("strength", 2)
@@ -389,7 +419,10 @@ func TestActor_DecrementAttribute(t *testing.T) {
 
 // Test Actor.AddCombatModifier and GetCombatModifiers
 func TestActor_AddCombatModifier(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	actor.AddCombatModifier("flanking", 2)
 	actor.AddCombatModifier("bless", 1)
@@ -402,7 +435,9 @@ func TestActor_AddCombatModifier(t *testing.T) {
 
 // Test Actor.RemoveCombatModifier
 func TestActor_RemoveCombatModifier(t *testing.T) {
-	actor, _ := NewActor("hero", 20, 15).
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
 		WithCombatModifier("flanking", 2).
 		WithCombatModifier("bless", 1).
 		Build()
@@ -423,7 +458,9 @@ func TestActor_RemoveCombatModifier(t *testing.T) {
 // Test Actor.SkillCheck - returns RollBuilder
 func TestActor_SkillCheck(t *testing.T) {
 	roller := NewRoller(42)
-	actor, _ := NewActor("hero", 20, 15).
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
 		WithAttribute("dexterity", 16).
 		Build()
 
@@ -447,7 +484,10 @@ func TestActor_SkillCheck(t *testing.T) {
 // Test Actor.SkillCheck - missing skill
 func TestActor_SkillCheck_MissingSkill(t *testing.T) {
 	roller := NewRoller(42)
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	_, err := actor.SkillCheck("nonexistent", roller)
 	if err == nil {
@@ -458,7 +498,9 @@ func TestActor_SkillCheck_MissingSkill(t *testing.T) {
 // Test Actor.SkillCheck with advantage
 func TestActor_SkillCheck_WithAdvantage(t *testing.T) {
 	roller := NewRoller(42)
-	actor, _ := NewActor("hero", 20, 15).
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
 		WithAttribute("stealth", 5).
 		Build()
 
@@ -481,7 +523,9 @@ func TestActor_SkillCheck_WithAdvantage(t *testing.T) {
 // Test Actor.AttackRoll - returns RollBuilder
 func TestActor_AttackRoll(t *testing.T) {
 	roller := NewRoller(42)
-	actor, _ := NewActor("hero", 20, 15).
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
 		WithCombatModifier("strength", 3).
 		WithCombatModifier("proficiency", 2).
 		Build()
@@ -502,7 +546,10 @@ func TestActor_AttackRoll(t *testing.T) {
 // Test Actor.AttackRoll with no modifiers
 func TestActor_AttackRoll_NoModifiers(t *testing.T) {
 	roller := NewRoller(42)
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	builder := actor.AttackRoll(roller)
 	result, _ := builder.Roll()
@@ -516,7 +563,9 @@ func TestActor_AttackRoll_NoModifiers(t *testing.T) {
 // Test Actor.AttackRoll with advantage
 func TestActor_AttackRoll_WithAdvantage(t *testing.T) {
 	roller := NewRoller(42)
-	actor, _ := NewActor("hero", 20, 15).
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
 		WithCombatModifier("strength", 3).
 		Build()
 
@@ -539,7 +588,9 @@ func TestActor_AttackRoll_WithAdvantage(t *testing.T) {
 // Test Actor.D100SkillCheck
 func TestActor_D100SkillCheck(t *testing.T) {
 	roller := NewRoller(42)
-	actor, _ := NewActor("hero", 20, 15).
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
 		WithAttribute("stealth", 45).
 		Build()
 
@@ -563,7 +614,10 @@ func TestActor_D100SkillCheck(t *testing.T) {
 // Test Actor.D100SkillCheck - missing skill
 func TestActor_D100SkillCheck_MissingSkill(t *testing.T) {
 	roller := NewRoller(42)
-	actor, _ := NewActor("hero", 20, 15).Build()
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		Build()
 
 	_, _, err := actor.D100SkillCheck("nonexistent", roller, 0)
 	if err == nil {
