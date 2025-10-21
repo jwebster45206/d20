@@ -143,7 +143,10 @@ func Example_damageDice() {
 
 // Example_newActor shows creating an actor with the builder pattern.
 func Example_newActor() {
-	actor, _ := d20.NewActor("Aragorn", 45, 18).Build()
+	actor, _ := d20.NewActor("Aragorn").
+		WithHP(45).
+		WithAC(18).
+		Build()
 
 	fmt.Printf("ID: %s\n", actor.ID())
 	fmt.Printf("HP: %d/%d\n", actor.HP(), actor.MaxHP())
@@ -156,28 +159,29 @@ func Example_newActor() {
 
 // Example_actorBuilder shows building an actor with attributes and modifiers.
 func Example_actorBuilder() {
-	actor, _ := d20.NewActor("Fighter", 50, 18).
+	actor, _ := d20.NewActor("Fighter").
+		WithHP(50).
+		WithAC(18).
 		WithAttribute("strength", 16).
 		WithAttribute("dexterity", 14).
 		WithCombatModifier("strength", 3).
 		WithCombatModifier("proficiency", 2).
-		WithInitiative(2).
 		Build()
 
 	fmt.Printf("HP: %d\n", actor.MaxHP())
-	fmt.Printf("Initiative: %d\n", actor.Initiative())
 	str, _ := actor.Attribute("strength")
 	fmt.Printf("Strength: %d\n", str)
 	// Output:
 	// HP: 50
-	// Initiative: 2
 	// Strength: 16
 }
 
 // Example_actorSkillCheck shows making a skill check.
 func Example_actorSkillCheck() {
 	roller := d20.NewRoller(42)
-	actor, _ := d20.NewActor("Rogue", 30, 15).
+	actor, _ := d20.NewActor("Rogue").
+		WithHP(30).
+		WithAC(15).
 		WithAttribute("dexterity", 18).
 		Build()
 
@@ -192,7 +196,9 @@ func Example_actorSkillCheck() {
 // Example_actorSkillCheckAdvantage shows a skill check with advantage.
 func Example_actorSkillCheckAdvantage() {
 	roller := d20.NewRoller(42)
-	actor, _ := d20.NewActor("Bard", 38, 14).
+	actor, _ := d20.NewActor("Bard").
+		WithHP(38).
+		WithAC(14).
 		WithAttribute("charisma", 16).
 		Build()
 
@@ -207,7 +213,9 @@ func Example_actorSkillCheckAdvantage() {
 // Example_actorAttackRoll shows making an attack roll.
 func Example_actorAttackRoll() {
 	roller := d20.NewRoller(42)
-	actor, _ := d20.NewActor("Fighter", 45, 18).
+	actor, _ := d20.NewActor("Fighter").
+		WithHP(45).
+		WithAC(18).
 		WithCombatModifier("strength", 4).
 		WithCombatModifier("proficiency", 3).
 		Build()
@@ -222,7 +230,9 @@ func Example_actorAttackRoll() {
 // Example_actorAttackAdvantage shows an attack with advantage.
 func Example_actorAttackAdvantage() {
 	roller := d20.NewRoller(42)
-	actor, _ := d20.NewActor("Barbarian", 52, 15).
+	actor, _ := d20.NewActor("Barbarian").
+		WithHP(52).
+		WithAC(15).
 		WithCombatModifier("strength", 5).
 		WithCombatModifier("proficiency", 3).
 		Build()
@@ -236,7 +246,10 @@ func Example_actorAttackAdvantage() {
 
 // Example_hpManagement shows managing actor hit points.
 func Example_hpManagement() {
-	actor, _ := d20.NewActor("Cleric", 38, 16).Build()
+	actor, _ := d20.NewActor("Cleric").
+		WithHP(38).
+		WithAC(16).
+		Build()
 
 	fmt.Printf("Start: %d/%d\n", actor.HP(), actor.MaxHP())
 
@@ -262,7 +275,9 @@ func Example_hpManagement() {
 
 // Example_attributes shows managing actor attributes.
 func Example_attributes() {
-	actor, _ := d20.NewActor("Wizard", 28, 12).
+	actor, _ := d20.NewActor("Wizard").
+		WithHP(28).
+		WithAC(12).
 		WithAttribute("intelligence", 18).
 		Build()
 
@@ -291,7 +306,9 @@ func Example_attributes() {
 // Example_combatModifiers shows managing combat modifiers.
 func Example_combatModifiers() {
 	roller := d20.NewRoller(42)
-	actor, _ := d20.NewActor("Paladin", 42, 18).
+	actor, _ := d20.NewActor("Paladin").
+		WithHP(42).
+		WithAC(18).
 		WithCombatModifier("strength", 4).
 		WithCombatModifier("proficiency", 3).
 		Build()
@@ -315,16 +332,28 @@ func Example_combatModifiers() {
 
 // Example_idNormalization shows automatic ID normalization to snake_case.
 func Example_idNormalization() {
-	actor1, _ := d20.NewActor("Simple", 20, 15).Build()
+	actor1, _ := d20.NewActor("Simple").
+		WithHP(20).
+		WithAC(15).
+		Build()
 	fmt.Println(actor1.ID())
 
-	actor2, _ := d20.NewActor("UPPERCASE", 20, 15).Build()
+	actor2, _ := d20.NewActor("UPPERCASE").
+		WithHP(20).
+		WithAC(15).
+		Build()
 	fmt.Println(actor2.ID())
 
-	actor3, _ := d20.NewActor("Mixed Case Name", 20, 15).Build()
+	actor3, _ := d20.NewActor("Mixed Case Name").
+		WithHP(20).
+		WithAC(15).
+		Build()
 	fmt.Println(actor3.ID())
 
-	actor4, _ := d20.NewActor("Goblin-#3", 20, 15).Build()
+	actor4, _ := d20.NewActor("Goblin-#3").
+		WithHP(20).
+		WithAC(15).
+		Build()
 	fmt.Println(actor4.ID())
 
 	// Output:
@@ -367,7 +396,9 @@ func Example_withAttributesMap() {
 		"dexterity":    14,
 		"constitution": 15,
 	}
-	actor, _ := d20.NewActor("Fighter", 50, 18).
+	actor, _ := d20.NewActor("Fighter").
+		WithHP(50).
+		WithAC(18).
 		WithAttributes(attrs).
 		Build()
 
@@ -385,7 +416,9 @@ func Example_withCombatModifiersMap() {
 		"strength":    4,
 		"proficiency": 3,
 	}
-	actor, _ := d20.NewActor("Fighter", 50, 18).
+	actor, _ := d20.NewActor("Fighter").
+		WithHP(50).
+		WithAC(18).
 		WithCombatModifiers(mods).
 		Build()
 
@@ -393,4 +426,101 @@ func Example_withCombatModifiersMap() {
 	fmt.Printf("Attack: %d\n", result.Value)
 	// Output:
 	// Attack: 13
+}
+
+// Example_withRoller shows creating an actor with rolled stats using dice notation.
+func Example_withRoller() {
+	roller := d20.NewRoller(42)
+	actor, _ := d20.NewActor("Conan").
+		WithRoller(roller).
+		WithRolledHP("10d10+30").
+		WithRolledAttribute("strength", "3d6+1").
+		WithAC(14).
+		Build()
+
+	fmt.Printf("HP: %d\n", actor.MaxHP())
+	str, _ := actor.Attribute("strength")
+	fmt.Printf("Strength: %d\n", str)
+	// Output:
+	// HP: 92
+	// Strength: 13
+}
+
+// Example_rolledCharacterCreation shows creating a complete character with rolled stats.
+func Example_rolledCharacterCreation() {
+	roller := d20.NewRoller(42)
+
+	// Roll all 6 ability scores using 4d6 keep highest 3
+	attrs := map[string]string{
+		"strength":     "3d6",
+		"dexterity":    "3d6",
+		"constitution": "3d6",
+		"intelligence": "3d6",
+		"wisdom":       "3d6",
+		"charisma":     "3d6",
+	}
+
+	fighter, _ := d20.NewActor("Thorin").
+		WithRoller(roller).
+		WithRolledHP("10d10+20"). // Level 10 fighter
+		WithAC(18).
+		WithRolledAttributes(attrs).
+		WithAttribute("proficiency", 4). // Mix rolled and fixed
+		Build()
+
+	fmt.Printf("HP: %d\n", fighter.MaxHP())
+	str, _ := fighter.Attribute("strength")
+	fmt.Printf("STR: %d\n", str)
+	dex, _ := fighter.Attribute("dexterity")
+	fmt.Printf("DEX: %d\n", dex)
+	// Output:
+	// HP: 82
+	// STR: 12
+	// DEX: 12
+}
+
+// Example_mixedStaticAndRolled shows combining fixed values with rolled stats.
+func Example_mixedStaticAndRolled() {
+	roller := d20.NewRoller(42)
+
+	// Point buy for abilities, rolled HP
+	actor, _ := d20.NewActor("Gimli").
+		WithRoller(roller).
+		WithRolledHP("8d10+24"). // Level 8, +3 CON
+		WithAC(18).
+		WithAttribute("strength", 16).          // Fixed point buy
+		WithAttribute("constitution", 16).      // Fixed point buy
+		WithRolledAttribute("charisma", "3d6"). // Dump stat, rolled
+		Build()
+
+	fmt.Printf("HP: %d\n", actor.MaxHP())
+	str, _ := actor.Attribute("strength")
+	cha, _ := actor.Attribute("charisma")
+	fmt.Printf("STR: %d, CHA: %d\n", str, cha)
+	// Output:
+	// HP: 73
+	// STR: 16, CHA: 7
+}
+
+// Example_rolledCombatStats shows rolling combat-related values.
+func Example_rolledCombatStats() {
+	roller := d20.NewRoller(42)
+
+	// Create a barbarian with variable rage damage
+	barbarian, _ := d20.NewActor("Grog").
+		WithRoller(roller).
+		WithHP(95).
+		WithAC(14).
+		WithAttribute("strength", 18).
+		Build()
+
+	// Temporarily check roller usage - in game you'd roll at rage time
+	builder := roller.Dice(1, 4)
+	rage, _ := builder.Roll()
+	barbarian.AddCombatModifier("rage", rage.Value)
+
+	result, _ := barbarian.AttackRoll(roller).Roll()
+	fmt.Printf("Raging attack includes +%d rage: %d total\n", rage.Value, result.Value)
+	// Output:
+	// Raging attack includes +2 rage: 10 total
 }

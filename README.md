@@ -132,13 +132,20 @@ type Actor struct {
 // ActorBuilder - fluent API for creating actors
 type ActorBuilder struct { /* private fields */ }
 
-func NewActor(id string, hp, ac int) *ActorBuilder
-func (ab *ActorBuilder) WithInitiative(init int) *ActorBuilder
+func NewActor(id string) *ActorBuilder
+func (ab *ActorBuilder) WithHP(hp int) *ActorBuilder
+func (ab *ActorBuilder) WithAC(ac int) *ActorBuilder
 func (ab *ActorBuilder) WithAttribute(name string, value int) *ActorBuilder
 func (ab *ActorBuilder) WithAttributes(attrs map[string]int) *ActorBuilder
 func (ab *ActorBuilder) WithCombatModifier(name string, value int) *ActorBuilder
 func (ab *ActorBuilder) WithCombatModifiers(mods map[string]int) *ActorBuilder
 func (ab *ActorBuilder) Build() (*Actor, error)
+
+// Rolled stat methods - require WithRoller() first
+func (ab *ActorBuilder) WithRoller(roller *Roller) *ActorBuilder
+func (ab *ActorBuilder) WithRolledHP(roll string) *ActorBuilder
+func (ab *ActorBuilder) WithRolledAttribute(key string, roll string) *ActorBuilder
+func (ab *ActorBuilder) WithRolledAttributes(attrs map[string]string) *ActorBuilder
 
 // HP Management
 func (a *Actor) ID() string               // Normalized identifier
@@ -180,12 +187,16 @@ func (a *Actor) D100SkillCheck(skill string, roller *Roller) (bool, *RollOutcome
 Use the builder pattern to create actors with optional configuration:
 
 ```go
-// Basic actor
-fighter, _ := d20.NewActor("Ironpants", 45, 18).Build()
+// Basic actor with fixed stats
+fighter, _ := d20.NewActor("Ironpants").
+    WithHP(45).
+    WithAC(18).
+    Build()
 
 // Actor with attributes and modifiers
-wizard, _ := d20.NewActor("Merlin", 38, 14).
-    WithInitiative(3).
+wizard, _ := d20.NewActor("Merlin").
+    WithHP(38).
+    WithAC(14).
     WithAttributes(map[string]int{
         "intelligence": 18,
         "wisdom":       16,
@@ -195,7 +206,29 @@ wizard, _ := d20.NewActor("Merlin", 38, 14).
         "proficiency":  4,
     }).
     Build()
+
+// Actor with rolled stats using dice notation
+roller := d20.NewRandomRoller()
+barbarian, _ := d20.NewActor("Grog").
+    WithRoller(roller).
+    WithRolledHP("10d12+30").        // Roll hit points
+    WithRolledAttribute("strength", "3d6").    // Roll ability score
+    WithRolledAttributes(map[string]string{       // Roll multiple abilities
+        "dexterity":    "3d6",
+        "constitution": "3d6",
+    }).
+    WithAC(14).
+    WithAttribute("proficiency", 4).  // Mix rolled and fixed values
+    Build()
 ```
+
+**Rolled Stats**: Use `WithRoller()` to enable dice rolling during character creation. This is perfect for:
+- Traditional ability score rolling
+- Random HP generation
+- Variable starting stats
+- Quick NPC generation
+
+All rolled methods accept dice notation strings like `"3d6"`, `"2d8+3"`, `"1d20+5"`, etc.
 
 ### Combat Modifiers
 
@@ -381,8 +414,9 @@ fmt.Printf("Roll: %d (from dice: %v)\n", result.Value, result.DiceRolls)
 roller := d20.NewRoller(time.Now().UnixNano())
 
 // Create a character using the builder pattern
-fighter, _ := d20.NewActor("Ironpants", 45, 18).
-    WithInitiative(2).
+fighter, _ := d20.NewActor("Ironpants").
+    WithHP(45).
+    WithAC(18).
     WithAttributes(map[string]int{
         "strength":     16,
         "dexterity":    14,
@@ -398,13 +432,30 @@ fighter, _ := d20.NewActor("Ironpants", 45, 18).
     Build()
 
 // Or create a simple actor and modify it
-wizard, _ := d20.NewActor("Merlin", 22, 12).
-    WithInitiative(3).
+wizard, _ := d20.NewActor("Merlin").
+    WithHP(22).
+    WithAC(12).
     Build()
 
 wizard.SetAttribute("intelligence", 18)
 wizard.SetAttribute("wisdom", 14)
 wizard.AddCombatModifier("intelligence", 4)
+
+// Create a character with rolled stats
+barbarian, _ := d20.NewActor("Grog").
+    WithRoller(roller).
+    WithRolledHP("12d12+48").        // Roll for hit points
+    WithRolledAttributes(map[string]string{
+        "strength":     "3d6",       // Roll ability scores
+        "dexterity":    "3d6",
+        "constitution": "3d6",
+        "intelligence": "3d6",       // Dump stat
+        "wisdom":       "3d6",
+        "charisma":     "3d6",
+    }).
+    WithAC(14).
+    WithAttribute("proficiency", 5). // Mix rolled and fixed
+    Build()
 
 // Make an attack roll using the actor's combat modifiers
 result, _ := fighter.AttackRoll(roller).Roll()
@@ -447,7 +498,9 @@ fighter.DecrementAttribute("dexterity", 1)
 
 ```go
 // Create a Call of Cthulhu investigator
-investigator, _ := d20.NewActor("Detective Morgan", 12, 10).
+investigator, _ := d20.NewActor("Detective Morgan").
+    WithHP(12).
+    WithAC(10).
     WithAttributes(map[string]int{
         "stealth":     45,  // 45% skill
         "fighting":    60,  // 60% skill  
@@ -473,6 +526,105 @@ if success {
 // Combat using Fighting skill
 success, outcome, _ = investigator.D100SkillCheck("fighting", roller)
 ```
+
+## Character Creation Workflows
+
+The library supports multiple character creation methods:
+
+### Traditional Rolled Stats (3d6, etc.)
+
+```go
+roller := d20.NewRandomRoller()
+
+// Classic 3d6 in order
+fighter, _ := d20.NewActor("Hrothgar").
+    WithRoller(roller).
+    WithRolledAttributes(map[string]string{
+        "strength":     "3d6",
+        "dexterity":    "3d6",
+        "constitution": "3d6",
+        "intelligence": "3d6",
+        "wisdom":       "3d6",
+        "charisma":     "3d6",
+    }).
+    WithRolledHP("1d10").
+    WithAC(16).
+    Build()
+
+// Alternative: Roll 4d6 per stat (simulates rolling 4 and dropping lowest mentally)
+wizard, _ := d20.NewActor("Gandalf").
+    WithRoller(roller).
+    WithRolledAttributes(map[string]string{
+        "strength":     "3d6",
+        "dexterity":    "3d6",
+        "constitution": "3d6",
+        "intelligence": "3d6",
+        "wisdom":       "3d6",
+        "charisma":     "3d6",
+    }).
+    WithRolledHP("1d6+1").
+    WithAC(12).
+    Build()
+```
+
+### Point Buy / Standard Array (Fixed Stats)
+
+```go
+// Point buy or standard array (15, 14, 13, 12, 10, 8)
+paladin, _ := d20.NewActor("Arthas").
+    WithHP(44).  // Fixed HP (average per level)
+    WithAC(18).
+    WithAttributes(map[string]int{
+        "strength":     15,
+        "dexterity":    10,
+        "constitution": 14,
+        "intelligence": 8,
+        "wisdom":       12,
+        "charisma":     13,
+    }).
+    Build()
+```
+
+### Hybrid Approach (Mix Rolled and Fixed)
+
+```go
+// Roll HP but use point buy for stats
+ranger, _ := d20.NewActor("Aragorn").
+    WithRoller(roller).
+    WithRolledHP("10d10+20").  // Rolled HP for excitement
+    WithAC(17).
+    WithAttributes(map[string]int{
+        "strength":     15,     // Point buy stats
+        "dexterity":    16,
+        "constitution": 14,
+        "intelligence": 10,
+        "wisdom":       14,
+        "charisma":     12,
+    }).
+    Build()
+
+// Or roll only dump stats
+minmaxer, _ := d20.NewActor("That Guy").
+    WithRoller(roller).
+    WithHP(45).
+    WithAC(18).
+    WithAttribute("strength", 18).     // Fixed primary stat
+    WithAttribute("constitution", 16). // Fixed important stat
+    WithRolledAttribute("intelligence", "3d6"). // Roll dump stat for fun
+    WithRolledAttribute("charisma", "3d6").     // Roll dump stat for fun
+    Build()
+```
+
+## Future Enhancements
+
+### Advanced Dice Notation
+Currently, the dice notation parser supports basic formats like `"1d20"`, `"2d6+3"`, and `"3d8-2"`. 
+
+**Planned additions:**
+- `kh` (keep highest): `"4d6kh3"` - Roll 4d6, keep highest 3 (common for D&D ability scores)
+- `kl` (keep lowest): `"4d6kl3"` - Roll 4d6, keep lowest 3
+- `dh` (drop highest): `"4d6dh1"` - Roll 4d6, drop highest 1
+- `dl` (drop lowest): `"4d6dl1"` - Roll 4d6, drop lowest 1 (equivalent to kh3)
 
 ## References
 
