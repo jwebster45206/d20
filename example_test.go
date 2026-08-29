@@ -475,8 +475,8 @@ func Example_rolledCharacterCreation() {
 	fmt.Printf("DEX: %d\n", dex)
 	// Output:
 	// HP: 82
-	// STR: 12
-	// DEX: 12
+	// STR: 14
+	// DEX: 15
 }
 
 // Example_mixedStaticAndRolled shows combining fixed values with rolled stats.

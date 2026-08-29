@@ -3,6 +3,7 @@ package d20
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -106,9 +107,16 @@ func (ab *ActorBuilder) WithRolledAttribute(key string, roll string) *ActorBuild
 	return ab
 }
 
+// WithRolledAttributes rolls each attribute. Keys are applied in sorted order
+// so a seeded roller produces a stable result.
 func (ab *ActorBuilder) WithRolledAttributes(rolls map[string]string) *ActorBuilder {
-	for key, roll := range rolls {
-		ab.WithRolledAttribute(key, roll)
+	keys := make([]string, 0, len(rolls))
+	for key := range rolls {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	for _, key := range keys {
+		ab.WithRolledAttribute(key, rolls[key])
 	}
 	return ab
 }
