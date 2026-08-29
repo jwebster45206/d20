@@ -299,7 +299,7 @@ func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus int) (bool, R
 		// Bonus die: Roll (1 + bonus) d10s for tens, take LOWEST
 		rolls := bonus + 1
 		bestTens := 9 // Start with worst
-		for i := 0; i < rolls; i++ {
+		for range rolls {
 			roll := roller.rng.Intn(10)
 			if roll < bestTens {
 				bestTens = roll
@@ -311,7 +311,7 @@ func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus int) (bool, R
 		// Penalty die: Roll (1 + |bonus|) d10s for tens, take HIGHEST
 		rolls := -bonus + 1
 		worstTens := 0 // Start with best
-		for i := 0; i < rolls; i++ {
+		for range rolls {
 			roll := roller.rng.Intn(10)
 			if roll > worstTens {
 				worstTens = roll
