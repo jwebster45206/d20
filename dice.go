@@ -1,8 +1,15 @@
 package d20
 
-// DiceManager provides a fluent API for configuring and executing dice rolls.
-// Use Dice() or DiceExpr() to start building a roll, chain configuration
-// methods, then call Roll() to execute.
+import "errors"
+
+var (
+	errRollCountZero          = errors.New("rollCount must be greater than 0")
+	errDieFacesZero           = errors.New("dieFaces must be greater than 0")
+	errPercentileRequires2d10 = errors.New("RollPercentile requires 2d10 (or unset count/faces to assume 2d10)")
+)
+
+// DiceManager is a pending roll. Get one from Roller.Dice or DiceExpr,
+// chain WithModifier / WithAdvantage, then call Roll.
 type DiceManager struct {
 	RollCount     uint
 	DieFaces      uint
@@ -28,46 +35,6 @@ func (dm *DiceManager) fail(err error) (RollOutcome, error) {
 func (dm *DiceManager) succeed(outcome RollOutcome) (RollOutcome, error) {
 	dm.err = nil
 	return outcome, nil
-}
-
-// Dice starts building a dice roll with the specified count and faces.
-// This is the entry point for the fluent API.
-//
-// Example:
-//
-//	result, err := roller.Dice(1, 20).WithModifier("strength", 3).Roll()
-func (r *Roller) Dice(rollCount uint, dieFaces uint) *DiceManager {
-	return &DiceManager{
-		roller:        r,
-		RollCount:     rollCount,
-		DieFaces:      dieFaces,
-		Modifiers:     []Modifier{},
-		AdvantageType: Normal,
-	}
-}
-
-// DiceExpr starts building a dice roll from standard notation (e.g. "2d20+1", "d6", "3d8-2").
-// Invalid notation is stored on the manager and returned from Roll, RollPercentile, and Error.
-// Notation bonuses are a Modifier with reason "modifier" and stack with later WithModifier calls.
-//
-// Example:
-//
-//	result, err := roller.DiceExpr("2d20+1").WithModifier("bless", 1).Roll()
-func (r *Roller) DiceExpr(notation string) *DiceManager {
-	dm := &DiceManager{
-		roller:        r,
-		Modifiers:     []Modifier{},
-		AdvantageType: Normal,
-	}
-	count, faces, mods, err := ParseNotation(notation)
-	if err != nil {
-		dm.err = err
-		return dm
-	}
-	dm.RollCount = count
-	dm.DieFaces = faces
-	dm.Modifiers = mods
-	return dm
 }
 
 // WithModifier adds a single modifier to the roll.
@@ -172,7 +139,7 @@ func (dm *DiceManager) RollPercentile() (RollOutcome, error) {
 //
 // Example:
 //
-//	result, err  := roller.Dice(2, 6).WithModifier("strength", 3).Roll()
+//	result, err := roller.Dice(2, 6).WithModifier("strength", 3).Roll()
 func (dm *DiceManager) Roll() (RollOutcome, error) {
 	if err := dm.Error(); err != nil {
 		return dm.fail(err)

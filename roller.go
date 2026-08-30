@@ -12,10 +12,7 @@ import (
 )
 
 var (
-	errRollCountZero          = errors.New("rollCount must be greater than 0")
-	errDieFacesZero           = errors.New("dieFaces must be greater than 0")
-	ErrInvalidDiceNotation    = errors.New("invalid dice notation format")
-	errPercentileRequires2d10 = errors.New("RollPercentile requires 2d10 (or unset count/faces to assume 2d10)")
+	ErrInvalidDiceNotation = errors.New("invalid dice notation format")
 )
 
 // rollNotationFmt matches patterns like: 1d20, 2d6+3, 3d8-2, d20+5
@@ -42,19 +39,45 @@ func NewRandomRoller() *Roller {
 	return NewRoller(time.Now().UnixNano())
 }
 
-// Roll provides a simple shorthand API for rolling dice using standard dice notation.
-// Accepts strings like "1d20", "2d6+3", "3d8-2", or "d20" (assumes 1d20).
-// This is a convenience method that doesn't use the fluent API.
-//
-// Examples:
-//   - "1d20" - Roll one 20-sided die
-//   - "2d6+3" - Roll two 6-sided dice and add 3
-//   - "3d8-2" - Roll three 8-sided dice and subtract 2
-//   - "d20" - Roll one 20-sided die (shorthand)
-//
-// Returns a RollOutcome with the result, or an error if the notation is invalid.
+// Roll is shorthand for DiceExpr(notation).Roll().
+// Accepts "1d20", "2d6+3", "3d8-2", or "d20" (count defaults to 1).
 func (r *Roller) Roll(notation string) (RollOutcome, error) {
 	return r.DiceExpr(notation).Roll()
+}
+
+// Dice starts a fluent roll with the given count and faces.
+//
+//	result, err := roller.Dice(1, 20).WithModifier("strength", 3).Roll()
+func (r *Roller) Dice(rollCount uint, dieFaces uint) *DiceManager {
+	return &DiceManager{
+		roller:        r,
+		RollCount:     rollCount,
+		DieFaces:      dieFaces,
+		Modifiers:     []Modifier{},
+		AdvantageType: Normal,
+	}
+}
+
+// DiceExpr starts a fluent roll from standard notation (e.g. "2d20+1", "d6", "3d8-2").
+// Invalid notation is stored on the manager and returned from Roll, RollPercentile, and Error.
+// A trailing +N or -N becomes a Modifier named "modifier" and stacks with later WithModifier calls.
+//
+//	result, err := roller.DiceExpr("2d20+1").WithModifier("bless", 1).Roll()
+func (r *Roller) DiceExpr(notation string) *DiceManager {
+	dm := &DiceManager{
+		roller:        r,
+		Modifiers:     []Modifier{},
+		AdvantageType: Normal,
+	}
+	count, faces, mods, err := ParseNotation(notation)
+	if err != nil {
+		dm.err = err
+		return dm
+	}
+	dm.RollCount = count
+	dm.DieFaces = faces
+	dm.Modifiers = mods
+	return dm
 }
 
 // ParseNotation parses standard dice notation such as "1d20", "d6", "2d6+3", or "3d8-2".

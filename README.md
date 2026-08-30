@@ -38,54 +38,58 @@ func main() {
     fmt.Println(result.Detail())
     // Example: "Rolled 1d20... 15; +3 strength, +2 proficiency; *Result: 20*"
 
-    advResult, _ := roller.Dice(1, 20).
+    r, err := roller.Dice(1, 20).
         WithAdvantage().
         WithModifier("dexterity", 4).
         Roll()
-    fmt.Printf("Roll: %d (dice: %v)\n", advResult.Value, advResult.DiceRolls)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Printf("Roll: %d (dice: %v)\n", r.Value, r.DiceRolls)
 }
 ```
 
 ## Core Types
 
-### Roller & DiceManager
+### Roller
+
+The RNG. Seed it for tests; `NewRandomRoller` for play. Safe to share across goroutines.
 
 ```go
 func NewRoller(seed int64) *Roller
 func NewRandomRoller() *Roller
 
-func (r *Roller) Roll(notation string) (RollOutcome, error)
-func (r *Roller) Dice(rollCount, dieFaces uint) *DiceManager
+func (r *Roller) Roll(notation string) (RollOutcome, error) // "2d6+3", "d20"
+func (r *Roller) Dice(count, faces uint) *DiceManager
 func (r *Roller) DiceExpr(notation string) *DiceManager
+```
 
-func ParseNotation(notation string) (rollCount uint, dieFaces uint, modifiers []Modifier, err error)
+### Dice notation
+
+```go
+func ParseNotation(notation string) (count, faces uint, modifiers []Modifier, err error)
 
 var ErrInvalidDiceNotation error
+```
 
-type DiceManager struct {
-    RollCount     uint
-    DieFaces      uint
-    Modifiers     []Modifier
-    AdvantageType AdvantageType
-}
+Accepted: `"1d20"`, `"d20"`, `"2d6+3"`, `"3d8-2"`. `"1d100"` is a uniform 1–100 die. A trailing `+N`/`-N` becomes a modifier named `"modifier"`. `ParseNotation` inspects without rolling; `DiceExpr` applies the parse so you can still chain fluent methods. Invalid notation is returned from `Roll()`.
 
+### DiceManager
+
+A pending roll, not a long-lived object. Get one from `Dice` or `DiceExpr`, chain, then `Roll()`.
+
+```go
 func (dm *DiceManager) WithModifier(name string, value int) *DiceManager
 func (dm *DiceManager) WithModifiers(modifiers map[string]int) *DiceManager
 func (dm *DiceManager) WithAdvantage() *DiceManager
 func (dm *DiceManager) WithDisadvantage() *DiceManager
-func (dm *DiceManager) Error() error
 func (dm *DiceManager) Roll() (RollOutcome, error)
 func (dm *DiceManager) RollPercentile() (RollOutcome, error)
 ```
 
-**Notation:** `"1d20"`, `"d20"`, `"2d6+3"`, `"3d8-2"`. `"1d100"` is a uniform 1–100 die. For Call of Cthulhu-style tens+ones (`00` = 100), use `Dice(2, 10).RollPercentile()`.
+Advantage (ignored by `RollPercentile`): rolls twice per die, uses the higher of each pair; disadvantage uses the lower. All rolls appear in `DiceRolls`.
 
-`ParseNotation` inspects a string without rolling. `DiceExpr` applies that parse so you can still chain `WithModifier`, `WithAdvantage`, and `Roll`. A notation bonus becomes a modifier named `"modifier"` and stacks with fluent modifiers. Invalid notation is stored on the manager: `Roll()` / `RollPercentile()` return it, and `Error()` is non-nil.
-
-**Advantage / disadvantage** (ignored by `RollPercentile`):
-- **Advantage**: rolls twice per die, uses the higher of each pair, returns all rolls in `DiceRolls`
-- **Disadvantage**: rolls twice per die, uses the lower of each pair
-- **Normal**: rolls `RollCount` dice
+`RollPercentile` is tens+ones (`00` = 100), distinct from `Roll("1d100")`. Requires 2d10, or unset count/faces to assume 2d10.
 
 ### RollOutcome
 
