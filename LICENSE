@@ -25,18 +25,3 @@ SOFTWARE.
 This library is released under the MIT License. It does not include text from
 third-party game books.
 
-### D&D 5th Edition
-
-Dice and actor helpers in this library are inspired by common 5e conventions
-(polyhedral dice, advantage/disadvantage, named modifiers). The library does
-not ship System Reference Document (SRD) text. The SRD is published by
-Wizards of the Coast LLC under CC BY 4.0:
-https://dnd.wizards.com/resources/systems-reference-document
-
-### Call of Cthulhu
-
-Call of Cthulhu® is a registered trademark of Chaosium Inc.
-
-This library implements compatible d100 roll-under mechanics (including
-bonus/penalty tens dice). It does not include copyrighted content from
-Call of Cthulhu sourcebooks.

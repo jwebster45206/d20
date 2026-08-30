@@ -31,7 +31,7 @@ func main() {
     result, _ := roller.Roll("1d20+3")
     fmt.Printf("Attack roll: %d\n", result.Value)
     
-    // Or use the fluent API for more control and named modifiers
+    // With named modifiers
     result, err := roller.Dice(1, 20).
         WithModifier("strength", 3).
         WithModifier("proficiency", 2).
@@ -54,7 +54,7 @@ func main() {
         WithModifier("strength", 3).
         WithModifier("proficiency", 2).
         Roll()
-    fmt.Println(detailResult.Detail)
+    fmt.Println(detailResult.Detail())
     // Example: "Rolled 1d20... 15; +3 strength, +2 proficiency; *Result: 20*"
 }
 ```
@@ -83,9 +83,8 @@ func (rb *RollBuilder) WithModifier(name string, value int) *RollBuilder
 func (rb *RollBuilder) WithModifiers(modifiers map[string]int) *RollBuilder
 func (rb *RollBuilder) WithAdvantage() *RollBuilder
 func (rb *RollBuilder) WithDisadvantage() *RollBuilder
-func (rb *RollBuilder) Normal() *RollBuilder
 func (rb *RollBuilder) Roll() (RollOutcome, error)
-func (r *Roller) RollPercentile(bonus int) (RollOutcome, error)
+func (rb *RollBuilder) RollPercentile() (RollOutcome, error)
 ```
 
 **Dice Notation Shorthand:**
@@ -95,7 +94,7 @@ The `Roll()` method accepts standard dice notation strings:
 - `"d20"` - Shorthand for 1d20
 - `"2d6+3"` - Roll two 6-sided dice and add 3
 - `"3d8-2"` - Roll three 8-sided dice and subtract 2
-- `"1d100"` - Uniform 1–100 (notation). For Call of Cthulhu-style tens+ones (`00` = 100), use `RollPercentile`.
+- `"1d100"` - Uniform 1–100 (notation). For Call of Cthulhu-style tens+ones (`00` = 100), use `Dice(2, 10).RollPercentile()`.
 
 **Advantage/Disadvantage Mechanics:**
 - **Advantage**: Rolls 2 dice, uses the higher value, returns both in `DiceRolls`
@@ -111,15 +110,23 @@ The result of a dice roll operation:
 ```go
 type RollOutcome struct {
     Value     int            // Final calculated result (dice + modifiers)
-    DiceRolls []int          // Raw die values (2 dice for adv/dis, 1+ for normal)
-    Detail    string         // Human-readable description
+    DiceRolls []DieRoll      // Each die: Faces + Result (2 dice for adv/dis)
+    Modifiers []Modifier      // Modifiers applied to the roll
 }
+
+type DieRoll struct {
+    Faces  uint // Die size
+    Result int  // Face showing
+}
+
+func (o RollOutcome) Detail() string  // Bioware-style description
 ```
 
 **Examples:**
-- Normal roll: `DiceRolls: [17]`, `Detail: "Rolled 1d20... 17; *Result: 17*"`
-- With advantage: `DiceRolls: [6, 8]`, `Value: 8`, `Detail: "Rolled 1d20... 6, 8; *Result: 8*"`
-- With modifiers: `Detail: "Rolled 1d20... 6; +3 strength; *Result: 9*"`
+- Normal roll: `DiceRolls: [{20, 17}]`, `Detail(): "Rolled 1d20... 17; *Result: 17*"`
+- With advantage: `DiceRolls: [{20, 6}, {20, 8}]`, `Value: 8`, `Detail(): "Rolled 2d20... 6, 8; *Result: 8*"`
+- With modifiers: `Detail(): "Rolled 1d20... 6; +3 strength; *Result: 9*"`
+- Percentile: `DiceRolls: [{10, 0}, {10, 0}]`, `Detail(): "Rolled 2d10... 0, 0; *Result: 100*"`
 
 ## Actor System
 
@@ -180,7 +187,7 @@ func (a *Actor) RemoveCombatModifier(name string)
 // Roll Methods
 func (a *Actor) SkillCheck(skill string, roller *Roller) (*RollBuilder, error)
 func (a *Actor) AttackRoll(roller *Roller) *RollBuilder
-func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus int) (bool, RollOutcome, error)
+func (a *Actor) D100SkillCheck(skill string, roller *Roller) (*RollBuilder, error)
 ```
 
 ### Creating Actors
@@ -278,15 +285,18 @@ result, _ := builder.WithAdvantage().Roll()             // Attack with advantage
 result, _ := builder.WithModifier("bless", 1).Roll()    // Add temporary modifier
 
 // D100SkillCheck - Percentile system (Call of Cthulhu, etc.)
-success, outcome, err := actor.D100SkillCheck("stealth", roller, 0)
+builder, err := actor.D100SkillCheck("stealth", roller)
+outcome, err := builder.RollPercentile()
+skill, _ := actor.Attribute("stealth")
+success := outcome.Value <= skill
 ```
 
 #### Advantage/Disadvantage Mechanics
 
 Advantage and disadvantage are configured on the `RollBuilder`:
 
-- **Advantage**: Rolls 2 dice, uses higher, shows both in `DiceRolls: [6, 8]`
-- **Disadvantage**: Rolls 2 dice, uses lower, shows both in `DiceRolls: [6, 8]`
+- **Advantage**: Rolls 2 dice, uses higher, shows both in `DiceRolls` (e.g. two `{Faces:20, Result:…}`)
+- **Disadvantage**: Rolls 2 dice, uses lower, shows both in `DiceRolls`
 - **Normal**: Rolls standard number of dice
 
 This system is common in 5e-style play for attack rolls, skill checks, and saving throws. The library returns all dice rolled for transparency.
@@ -296,10 +306,7 @@ This system is common in 5e-style play for attack rolls, skill checks, and savin
 The library supports d100/percentile rolls in two ways:
 
 - **`Roll("1d100")`**: Uniform 1–100 via dice notation (same as any other die).
-- **`RollPercentile` / `D100SkillCheck`**: Call of Cthulhu-style tens + ones (`00` = 100), with optional bonus/penalty tens dice.
-  - **Bonus** (`bonus > 0`): Roll extra d10s for tens, take the LOWEST (better chance)
-  - **Penalty** (`bonus < 0`): Roll extra d10s for tens, take the HIGHEST (worse chance)
-  - **Combat**: Use skill checks (Fighting, Firearms, etc.) rather than a separate attack roll
+- **`Dice(2, 10).RollPercentile()` / `D100SkillCheck`**: Call of Cthulhu-style tens + ones (`00` = 100). Requires 2d10 (or unset count/faces to assume 2d10). `DiceRolls` is two `DieRoll`s with `Faces: 10`.
 
 ### Skill Checks
 
@@ -317,11 +324,13 @@ builder, _ = actor.SkillCheck("perception", roller)
 result, _ = builder.WithDisadvantage().Roll()  // With disadvantage
 
 // Call of Cthulhu skill checks (d100, roll under skill value)
-success, outcome, _ := investigator.D100SkillCheck("stealth", roller, 0)
+builder, _ := investigator.D100SkillCheck("stealth", roller)
+outcome, _ := builder.RollPercentile()
+skillValue, _ := investigator.Attribute("stealth")
+success := outcome.Value <= skillValue
 
 // Check success for d100 systems
 if success {
-    skillValue, _ := investigator.Attribute("stealth")
     fmt.Printf("Skill check succeeded with %d (needed ≤ %d)", outcome.Value, skillValue)
 }
 ```
@@ -336,7 +345,7 @@ The [5e SRD](https://dnd.wizards.com/resources/systems-reference-document) is pu
 
 ### Call of Cthulhu-style d100
 
-`RollPercentile` and `D100SkillCheck` implement compatible d100 roll-under mechanics (tens + ones, `00` = 100, bonus/penalty tens dice). They are not a Call of Cthulhu rules implementation.
+`Dice(2, 10).RollPercentile()` and `D100SkillCheck` implement compatible d100 roll-under mechanics (tens + ones, `00` = 100). They are not a Call of Cthulhu rules implementation.
 
 Call of Cthulhu® is a registered trademark of Chaosium Inc. This library does not include copyrighted content from Call of Cthulhu sourcebooks.
 
@@ -498,16 +507,18 @@ investigator.IncrementAttribute("sanity", 1)  // Therapy or rest
 investigator.DecrementAttribute("sanity", 3)  // Witnessed something horrifying     
 
 // Perform d100 skill checks
-success, outcome, _ := investigator.D100SkillCheck("stealth", roller, 0)
-if success {
-    skillValue, _ := investigator.Attribute("stealth")
+builder, _ := investigator.D100SkillCheck("stealth", roller)
+outcome, _ := builder.RollPercentile()
+skillValue, _ := investigator.Attribute("stealth")
+if outcome.Value <= skillValue {
     fmt.Printf("Stealth succeeded: rolled %d ≤ %d\n", outcome.Value, skillValue)
 } else {
     fmt.Printf("Stealth failed: rolled %d\n", outcome.Value)
 }
 
 // Combat using Fighting skill
-success, outcome, _ = investigator.D100SkillCheck("fighting", roller, 0)
+builder, _ = investigator.D100SkillCheck("fighting", roller)
+outcome, _ = builder.RollPercentile()
 ```
 
 ## Character Creation Workflows

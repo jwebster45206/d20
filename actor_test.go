@@ -124,7 +124,7 @@ func TestActorBuilder_WithCombatModifier(t *testing.T) {
 	result, _ := builder.Roll()
 
 	// Expect dice + flanking(2) + bless(1) = dice + 3
-	expected := result.DiceRolls[0] + 3
+	expected := result.DiceRolls[0].Result + 3
 	if result.Value != expected {
 		t.Errorf("Expected value %d, got %d", expected, result.Value)
 	}
@@ -490,7 +490,7 @@ func TestActor_SkillCheck(t *testing.T) {
 	}
 
 	// Value should be dice + dexterity (16)
-	expected := result.DiceRolls[0] + 16
+	expected := result.DiceRolls[0].Result + 16
 	if result.Value != expected {
 		t.Errorf("Expected value %d, got %d", expected, result.Value)
 	}
@@ -528,7 +528,7 @@ func TestActor_SkillCheck_WithAdvantage(t *testing.T) {
 	}
 
 	// Value should be higher roll + stealth (5)
-	higherRoll := max(result.DiceRolls[0], result.DiceRolls[1])
+	higherRoll := max(result.DiceRolls[0].Result, result.DiceRolls[1].Result)
 	expected := higherRoll + 5
 	if result.Value != expected {
 		t.Errorf("Expected value %d, got %d", expected, result.Value)
@@ -552,7 +552,7 @@ func TestActor_AttackRoll(t *testing.T) {
 	}
 
 	// Value should be dice + 5 (3+2)
-	expected := result.DiceRolls[0] + 5
+	expected := result.DiceRolls[0].Result + 5
 	if result.Value != expected {
 		t.Errorf("Expected value %d, got %d", expected, result.Value)
 	}
@@ -570,8 +570,8 @@ func TestActor_AttackRoll_NoModifiers(t *testing.T) {
 	result, _ := builder.Roll()
 
 	// Just the dice roll, no modifiers
-	if result.Value != result.DiceRolls[0] {
-		t.Errorf("Expected value %d (dice only), got %d", result.DiceRolls[0], result.Value)
+	if result.Value != result.DiceRolls[0].Result {
+		t.Errorf("Expected value %d (dice only), got %d", result.DiceRolls[0].Result, result.Value)
 	}
 }
 
@@ -593,7 +593,7 @@ func TestActor_AttackRoll_WithAdvantage(t *testing.T) {
 	}
 
 	// Value should be higher roll + strength (3)
-	higherRoll := max(result.DiceRolls[0], result.DiceRolls[1])
+	higherRoll := max(result.DiceRolls[0].Result, result.DiceRolls[1].Result)
 	expected := higherRoll + 3
 	if result.Value != expected {
 		t.Errorf("Expected value %d, got %d", expected, result.Value)
@@ -609,20 +609,50 @@ func TestActor_D100SkillCheck(t *testing.T) {
 		WithAttribute("stealth", 45).
 		Build()
 
-	success, outcome, err := actor.D100SkillCheck("stealth", roller, 0)
+	builder, err := actor.D100SkillCheck("stealth", roller)
 	if err != nil {
 		t.Fatalf("D100SkillCheck() error: %v", err)
 	}
 
-	// Outcome should have a value between 1 and 100
+	outcome, err := builder.RollPercentile()
+	if err != nil {
+		t.Fatalf("RollPercentile() error: %v", err)
+	}
+
+	if len(outcome.DiceRolls) != 2 {
+		t.Errorf("DiceRolls len = %d, want 2", len(outcome.DiceRolls))
+	}
+
 	if outcome.Value < 1 || outcome.Value > 100 {
 		t.Errorf("Expected value 1-100, got %d", outcome.Value)
 	}
 
-	// Success should be true if value <= 45
+	skill, _ := actor.Attribute("stealth")
+	success := outcome.Value <= skill
 	expectedSuccess := outcome.Value <= 45
 	if success != expectedSuccess {
 		t.Errorf("Expected success %v, got %v (rolled %d vs 45)", expectedSuccess, success, outcome.Value)
+	}
+}
+
+func TestActor_D100SkillCheck_WithModifier(t *testing.T) {
+	roller := NewRoller(42)
+	actor, _ := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		WithAttribute("stealth", 45).
+		Build()
+
+	builder, err := actor.D100SkillCheck("stealth", roller)
+	if err != nil {
+		t.Fatalf("D100SkillCheck: %v", err)
+	}
+	outcome, err := builder.WithModifier("penalty", -5).RollPercentile()
+	if err != nil {
+		t.Fatalf("RollPercentile: %v", err)
+	}
+	if len(outcome.Modifiers) != 1 || outcome.Modifiers[0].Value != -5 {
+		t.Fatalf("Modifiers = %+v, want penalty -5", outcome.Modifiers)
 	}
 }
 
@@ -634,47 +664,8 @@ func TestActor_D100SkillCheck_MissingSkill(t *testing.T) {
 		WithAC(15).
 		Build()
 
-	_, _, err := actor.D100SkillCheck("nonexistent", roller, 0)
+	_, err := actor.D100SkillCheck("nonexistent", roller)
 	if err == nil {
 		t.Error("Expected error for missing skill, got nil")
 	}
-}
-
-func TestActor_D100SkillCheck_BonusAndPenalty(t *testing.T) {
-	actor, err := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithAttribute("stealth", 45).
-		Build()
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-
-	t.Run("bonus die", func(t *testing.T) {
-		success, outcome, err := actor.D100SkillCheck("stealth", NewRoller(42), 1)
-		if err != nil {
-			t.Fatalf("D100SkillCheck: %v", err)
-		}
-		if len(outcome.DiceRolls) != 3 {
-			t.Errorf("DiceRolls len = %d, want 3", len(outcome.DiceRolls))
-		}
-		expectedSuccess := outcome.Value <= 45
-		if success != expectedSuccess {
-			t.Errorf("success = %v, want %v (rolled %d)", success, expectedSuccess, outcome.Value)
-		}
-	})
-
-	t.Run("penalty die", func(t *testing.T) {
-		success, outcome, err := actor.D100SkillCheck("stealth", NewRoller(42), -1)
-		if err != nil {
-			t.Fatalf("D100SkillCheck: %v", err)
-		}
-		if len(outcome.DiceRolls) != 3 {
-			t.Errorf("DiceRolls len = %d, want 3", len(outcome.DiceRolls))
-		}
-		expectedSuccess := outcome.Value <= 45
-		if success != expectedSuccess {
-			t.Errorf("success = %v, want %v (rolled %d)", success, expectedSuccess, outcome.Value)
-		}
-	})
 }

@@ -242,7 +242,7 @@ func (a *Actor) GetCombatModifiers() []Modifier {
 //		return err
 //	}
 //	result, err := builder.WithAdvantage().Roll()
-func (a *Actor) SkillCheck(skill string, roller *Roller) (*RollBuilder, error) {
+func (a *Actor) SkillCheck(skill string, roller *Roller) (*DiceManager, error) {
 	skillValue, exists := a.Attribute(skill)
 	if !exists {
 		return nil, fmt.Errorf("skill %q not found in actor attributes", skill)
@@ -265,7 +265,7 @@ func (a *Actor) SkillCheck(skill string, roller *Roller) (*RollBuilder, error) {
 //
 //	// With situational modifier
 //	result, _ := actor.AttackRoll(roller).WithModifier("flanking", 2).Roll()
-func (a *Actor) AttackRoll(roller *Roller) *RollBuilder {
+func (a *Actor) AttackRoll(roller *Roller) *DiceManager {
 	builder := roller.Dice(1, 20)
 
 	// Add all combat modifiers
@@ -276,37 +276,15 @@ func (a *Actor) AttackRoll(roller *Roller) *RollBuilder {
 	return builder
 }
 
-// D100SkillCheck performs a percentile skill check (roll-under).
-// Returns success (rolled <= skill value), the roll outcome, and any error.
+// D100SkillCheck returns a 2d10 RollBuilder for a roll-under skill check.
+// Errors if the skill is missing. Compare outcome.Value to Attribute(skill) for success.
 //
-// The roll uses RollPercentile, not Roll("1d100"): tens + ones with 00 = 100.
-// The bonus parameter implements Call of Cthulhu-style bonus/penalty tens dice:
-//   - bonus > 0: Roll multiple d10s for tens digit, take the LOWEST (better chance)
-//   - bonus < 0: Roll multiple d10s for tens digit, take the HIGHEST (worse chance)
-//   - bonus = 0: Normal d100 roll (1d10 for tens, 1d10 for ones)
-//
-// Example:
-//
-//	actor.SetAttribute("stealth", 45)  // 45% skill
-//	success, roll, _ := actor.D100SkillCheck("stealth", roller, 0)  // Normal roll
-//	bonusSuccess, roll, _ := actor.D100SkillCheck("stealth", roller, 1)  // Bonus die
-//	penaltySuccess, roll, _ := actor.D100SkillCheck("stealth", roller, -1) // Penalty die
-func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus int) (bool, RollOutcome, error) {
-	skillValue, exists := a.Attribute(skill)
-	if !exists {
-		return false, RollOutcome{}, fmt.Errorf("skill %q not found in actor attributes", skill)
+//	builder, _ := actor.D100SkillCheck("stealth", roller)
+//	outcome, _ := builder.RollPercentile()
+func (a *Actor) D100SkillCheck(skill string, roller *Roller) (*DiceManager, error) {
+	if _, exists := a.Attribute(skill); !exists {
+		return nil, fmt.Errorf("skill %q not found in actor attributes", skill)
 	}
 
-	outcome, err := roller.RollPercentile(bonus)
-	if err != nil {
-		return false, RollOutcome{}, err
-	}
-
-	success := outcome.Value <= skillValue
-	modifiers := []Modifier{
-		{Value: skillValue, Reason: fmt.Sprintf("%s (target)", strings.ToLower(skill))},
-	}
-	outcome = NewRollOutcome(1, 100, outcome.DiceRolls, modifiers, outcome.Value)
-
-	return success, outcome, nil
+	return roller.Dice(2, 10), nil
 }

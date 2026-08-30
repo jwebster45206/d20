@@ -1,6 +1,7 @@
 package d20
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -25,12 +26,12 @@ func TestRollBuilder_SimpleDiceRoll(t *testing.T) {
 		t.Errorf("Expected 1 die roll, got %d", len(result.DiceRolls))
 	}
 
-	if result.DiceRolls[0] < 1 || result.DiceRolls[0] > 20 {
-		t.Errorf("Die roll %d out of range [1, 20]", result.DiceRolls[0])
+	if result.DiceRolls[0].Result < 1 || result.DiceRolls[0].Result > 20 {
+		t.Errorf("Die roll %d out of range [1, 20]", result.DiceRolls[0].Result)
 	}
 
-	if result.Value != result.DiceRolls[0] {
-		t.Errorf("Value %d doesn't match die roll %d (no modifiers)", result.Value, result.DiceRolls[0])
+	if result.Value != result.DiceRolls[0].Result {
+		t.Errorf("Value %d doesn't match die roll %d (no modifiers)", result.Value, result.DiceRolls[0].Result)
 	}
 }
 
@@ -42,7 +43,7 @@ func TestRollBuilder_WithModifier(t *testing.T) {
 	}
 
 	// Value should be dice + modifier
-	expected := result.DiceRolls[0] + 3
+	expected := result.DiceRolls[0].Result + 3
 	if result.Value != expected {
 		t.Errorf("Value %d doesn't match expected %d", result.Value, expected)
 	}
@@ -61,7 +62,7 @@ func TestRollBuilder_WithAdvantage(t *testing.T) {
 	}
 
 	// Value should be the higher roll (no modifiers)
-	higherRoll := max(result.DiceRolls[0], result.DiceRolls[1])
+	higherRoll := max(result.DiceRolls[0].Result, result.DiceRolls[1].Result)
 	if result.Value != higherRoll {
 		t.Errorf("Expected value %d (higher roll), got %d", higherRoll, result.Value)
 	}
@@ -80,7 +81,7 @@ func TestRollBuilder_WithDisadvantage(t *testing.T) {
 	}
 
 	// Value should be the lower roll (no modifiers)
-	lowerRoll := min(result.DiceRolls[0], result.DiceRolls[1])
+	lowerRoll := min(result.DiceRolls[0].Result, result.DiceRolls[1].Result)
 	if result.Value != lowerRoll {
 		t.Errorf("Expected value %d (lower roll), got %d", lowerRoll, result.Value)
 	}
@@ -161,8 +162,8 @@ func TestRoller_Roll_Values(t *testing.T) {
 		if len(result.DiceRolls) != 1 {
 			t.Errorf("expected 1 die roll, got %d", len(result.DiceRolls))
 		}
-		if result.DiceRolls[0] < 1 || result.DiceRolls[0] > 20 {
-			t.Errorf("die roll %d out of range [1, 20]", result.DiceRolls[0])
+		if result.DiceRolls[0].Result < 1 || result.DiceRolls[0].Result > 20 {
+			t.Errorf("die roll %d out of range [1, 20]", result.DiceRolls[0].Result)
 		}
 	})
 
@@ -191,9 +192,9 @@ func TestRoller_Roll_Values(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		expected := result.DiceRolls[0] + 3
+		expected := result.DiceRolls[0].Result + 3
 		if result.Value != expected {
-			t.Errorf("expected value %d (dice %d + 3), got %d", expected, result.DiceRolls[0], result.Value)
+			t.Errorf("expected value %d (dice %d + 3), got %d", expected, result.DiceRolls[0].Result, result.Value)
 		}
 	})
 
@@ -202,9 +203,9 @@ func TestRoller_Roll_Values(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		expected := result.DiceRolls[0] - 2
+		expected := result.DiceRolls[0].Result - 2
 		if result.Value != expected {
-			t.Errorf("expected value %d (dice %d - 2), got %d", expected, result.DiceRolls[0], result.Value)
+			t.Errorf("expected value %d (dice %d - 2), got %d", expected, result.DiceRolls[0].Result, result.Value)
 		}
 	})
 }
@@ -216,46 +217,87 @@ func TestAdvantageTypeZeroValue(t *testing.T) {
 	}
 }
 
-func TestRoller_RollPercentile(t *testing.T) {
-	t.Run("bonus 0 is two dice then ones", func(t *testing.T) {
+func TestDiceManager_RollPercentile(t *testing.T) {
+	t.Run("2d10 two digits and value in range", func(t *testing.T) {
 		roller := NewRoller(42)
-		outcome, err := roller.RollPercentile(0)
+		outcome, err := roller.Dice(2, 10).RollPercentile()
 		if err != nil {
 			t.Fatalf("RollPercentile: %v", err)
 		}
 		if len(outcome.DiceRolls) != 2 {
-			t.Fatalf("DiceRolls len = %d, want 2 (1 tens + ones)", len(outcome.DiceRolls))
+			t.Fatalf("DiceRolls len = %d, want 2", len(outcome.DiceRolls))
+		}
+		for i, d := range outcome.DiceRolls {
+			if d.Faces != 10 {
+				t.Errorf("DiceRolls[%d].Faces = %d, want 10", i, d.Faces)
+			}
+			if d.Result < 0 || d.Result > 9 {
+				t.Errorf("DiceRolls[%d].Result = %d, want 0–9", i, d.Result)
+			}
 		}
 		if outcome.Value < 1 || outcome.Value > 100 {
 			t.Errorf("Value %d not in 1–100", outcome.Value)
+		}
+		want := outcome.DiceRolls[0].Result*10 + outcome.DiceRolls[1].Result
+		if want == 0 {
+			want = 100
+		}
+		if outcome.Value != want {
+			t.Errorf("Value = %d, want %d from DiceRolls %v", outcome.Value, want, outcome.DiceRolls)
 		}
 	})
 
-	t.Run("bonus 1 rolls two tens plus ones", func(t *testing.T) {
+	t.Run("unset count and faces assumes 2d10", func(t *testing.T) {
 		roller := NewRoller(42)
-		outcome, err := roller.RollPercentile(1)
+		outcome, err := roller.Dice(0, 0).RollPercentile()
 		if err != nil {
 			t.Fatalf("RollPercentile: %v", err)
 		}
-		if len(outcome.DiceRolls) != 3 {
-			t.Fatalf("DiceRolls len = %d, want 3 (2 tens + ones)", len(outcome.DiceRolls))
-		}
-		if outcome.Value < 1 || outcome.Value > 100 {
-			t.Errorf("Value %d not in 1–100", outcome.Value)
+		if len(outcome.DiceRolls) != 2 {
+			t.Fatalf("DiceRolls len = %d, want 2", len(outcome.DiceRolls))
 		}
 	})
 
-	t.Run("penalty 2 rolls three tens plus ones", func(t *testing.T) {
-		roller := NewRoller(42)
-		outcome, err := roller.RollPercentile(-2)
+	t.Run("00 maps to 100", func(t *testing.T) {
+		// Seed chosen so the first two Intn(10) calls are both 0.
+		roller := NewRoller(60)
+		outcome, err := roller.Dice(2, 10).RollPercentile()
 		if err != nil {
 			t.Fatalf("RollPercentile: %v", err)
 		}
-		if len(outcome.DiceRolls) != 4 {
-			t.Fatalf("DiceRolls len = %d, want 4 (3 tens + ones)", len(outcome.DiceRolls))
+		if outcome.DiceRolls[0].Result != 0 || outcome.DiceRolls[1].Result != 0 {
+			t.Fatalf("DiceRolls = %v, want [0 0] (update seed if RNG changed)", outcome.DiceRolls)
 		}
-		if outcome.Value < 1 || outcome.Value > 100 {
-			t.Errorf("Value %d not in 1–100", outcome.Value)
+		if outcome.Value != 100 {
+			t.Errorf("Value = %d, want 100", outcome.Value)
+		}
+	})
+
+	t.Run("rejects non-2d10", func(t *testing.T) {
+		_, err := NewRoller(42).Dice(1, 20).RollPercentile()
+		if err == nil {
+			t.Fatal("expected error for 1d20, got nil")
+		}
+		if !errors.Is(err, errPercentileRequires2d10) {
+			t.Errorf("err = %v, want %v", err, errPercentileRequires2d10)
+		}
+	})
+
+	t.Run("honors modifiers", func(t *testing.T) {
+		roller := NewRoller(42)
+		outcome, err := roller.Dice(2, 10).WithModifier("penalty", -5).RollPercentile()
+		if err != nil {
+			t.Fatalf("RollPercentile: %v", err)
+		}
+		if len(outcome.Modifiers) != 1 || outcome.Modifiers[0].Value != -5 {
+			t.Fatalf("Modifiers = %+v, want penalty -5", outcome.Modifiers)
+		}
+		raw := outcome.DiceRolls[0].Result*10 + outcome.DiceRolls[1].Result
+		if raw == 0 {
+			raw = 100
+		}
+		if outcome.Value != raw-5 {
+			t.Errorf("Value = %d, want %d (raw %d + modifiers)", outcome.Value, raw-5, raw)
 		}
 	})
 }
