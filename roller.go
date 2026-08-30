@@ -14,7 +14,7 @@ import (
 var (
 	errRollCountZero          = errors.New("rollCount must be greater than 0")
 	errDieFacesZero           = errors.New("dieFaces must be greater than 0")
-	errInvalidDiceNotation    = errors.New("invalid dice notation format")
+	ErrInvalidDiceNotation    = errors.New("invalid dice notation format")
 	errPercentileRequires2d10 = errors.New("RollPercentile requires 2d10 (or unset count/faces to assume 2d10)")
 )
 
@@ -54,35 +54,42 @@ func NewRandomRoller() *Roller {
 //
 // Returns a RollOutcome with the result, or an error if the notation is invalid.
 func (r *Roller) Roll(notation string) (RollOutcome, error) {
+	return r.DiceExpr(notation).Roll()
+}
+
+// ParseNotation parses standard dice notation such as "1d20", "d6", "2d6+3", or "3d8-2".
+// Count defaults to 1 when omitted ("d20"). A trailing +N or -N becomes a Modifier
+// with reason "modifier". The result can be applied to a DiceManager or inspected
+// without rolling.
+//
+// Returns ErrInvalidDiceNotation (via errors.Is) when the string is not valid notation.
+func ParseNotation(notation string) (rollCount uint, dieFaces uint, modifiers []Modifier, err error) {
 	notation = strings.TrimSpace(strings.ToLower(notation))
 
 	matches := rollNotationFmt.FindStringSubmatch(notation)
 	if matches == nil {
-		return RollOutcome{}, fmt.Errorf("%w: %s", errInvalidDiceNotation, notation)
+		return 0, 0, nil, fmt.Errorf("%w: %s", ErrInvalidDiceNotation, notation)
 	}
 
-	// Parse roll count (default to 1 if not specified)
-	rollCount := uint(1)
+	rollCount = 1
 	if matches[1] != "" {
 		count, err := strconv.Atoi(matches[1])
 		if err != nil || count <= 0 {
-			return RollOutcome{}, fmt.Errorf("%w: invalid roll count", errInvalidDiceNotation)
+			return 0, 0, nil, fmt.Errorf("%w: invalid roll count", ErrInvalidDiceNotation)
 		}
 		rollCount = uint(count)
 	}
 
-	// Parse die faces
-	dieFaces, err := strconv.Atoi(matches[2])
-	if err != nil || dieFaces <= 0 {
-		return RollOutcome{}, fmt.Errorf("%w: invalid die faces", errInvalidDiceNotation)
+	faces, err := strconv.Atoi(matches[2])
+	if err != nil || faces <= 0 {
+		return 0, 0, nil, fmt.Errorf("%w: invalid die faces", ErrInvalidDiceNotation)
 	}
 
-	// Parse modifier (if present)
-	var modifiers []Modifier
+	modifiers = []Modifier{}
 	if matches[3] != "" {
 		modValue, err := strconv.Atoi(matches[5])
 		if err != nil {
-			return RollOutcome{}, fmt.Errorf("%w: invalid modifier value", errInvalidDiceNotation)
+			return 0, 0, nil, fmt.Errorf("%w: invalid modifier value", ErrInvalidDiceNotation)
 		}
 		if matches[4] == "-" {
 			modValue = -modValue
@@ -90,11 +97,5 @@ func (r *Roller) Roll(notation string) (RollOutcome, error) {
 		modifiers = append(modifiers, NewModifier("modifier", modValue))
 	}
 
-	// Use the fluent API internally
-	builder := r.Dice(rollCount, uint(dieFaces))
-	for _, mod := range modifiers {
-		builder = builder.WithModifier(mod.Reason, mod.Value)
-	}
-
-	return builder.Roll()
+	return rollCount, uint(faces), modifiers, nil
 }

@@ -75,26 +75,41 @@ func (r *Roller) Roll(notation string) (RollOutcome, error)
 
 // Start building a roll - for complex scenarios
 func (r *Roller) Dice(rollCount, dieFaces uint) *DiceManager
+func (r *Roller) DiceExpr(notation string) *DiceManager
+
+// Parse notation without rolling
+func ParseNotation(notation string) (rollCount uint, dieFaces uint, modifiers []Modifier, err error)
+
+var ErrInvalidDiceNotation error
 
 // DiceManager - fluent API for configuring rolls
-type DiceManager struct { /* private fields */ }
+type DiceManager struct {
+    RollCount     uint
+    DieFaces      uint
+    Modifiers     []Modifier
+    AdvantageType AdvantageType
+    Results       []RollOutcome // last successful roll; empty after a failed roll
+}
 
 func (rb *DiceManager) WithModifier(name string, value int) *DiceManager
 func (rb *DiceManager) WithModifiers(modifiers map[string]int) *DiceManager
 func (rb *DiceManager) WithAdvantage() *DiceManager
 func (rb *DiceManager) WithDisadvantage() *DiceManager
+func (rb *DiceManager) Error() error
 func (rb *DiceManager) Roll() (RollOutcome, error)
 func (rb *DiceManager) RollPercentile() (RollOutcome, error)
 ```
 
 **Dice Notation Shorthand:**
 
-The `Roll()` method accepts standard dice notation strings:
+The `Roll()` method and `ParseNotation` / `DiceExpr` accept standard dice notation strings:
 - `"1d20"` - Roll one 20-sided die
 - `"d20"` - Shorthand for 1d20
 - `"2d6+3"` - Roll two 6-sided dice and add 3
 - `"3d8-2"` - Roll three 8-sided dice and subtract 2
 - `"1d100"` - Uniform 1–100 (notation). For Call of Cthulhu-style tens+ones (`00` = 100), use `Dice(2, 10).RollPercentile()`.
+
+`ParseNotation` returns count, faces, and modifiers without a roller. `DiceExpr` applies that parse to a `DiceManager` so you can still chain `WithModifier`, `WithAdvantage`, and `Roll`. A notation bonus becomes a modifier named `"modifier"` and stacks with fluent modifiers. Invalid notation is stored on the manager: `Roll()` / `RollPercentile()` return it, and `Error()` is non-nil. `Results` holds the last successful outcome (one element) and is emptied on failure.
 
 **Advantage/Disadvantage Mechanics:**
 - **Advantage**: Rolls 2 dice, uses the higher value, returns both in `DiceRolls`
@@ -130,61 +145,26 @@ func (o RollOutcome) Detail() string  // Bioware-style description
 
 ## Actor System
 
-Actors represent characters, NPCs, and monsters in the game world. The library uses a fluent builder pattern for creating actors:
+Actors represent characters, NPCs, and monsters. Attribute keys are caller-owned (lowercase by convention). `SkillCheck` and `D100SkillCheck` lowercase the skill name on lookup.
 
 ```go
 type Actor struct {
-    // Private fields - use builder and accessors
+    ID              string
+    MaxHP           int
+    HP              int
+    AC              int
+    Initiative      int
+    CombatModifiers []Modifier
+    Attributes      map[string]int
 }
 
-// ActorBuilder - fluent API for creating actors
-type ActorBuilder struct { /* private fields */ }
+func NewActor(id string) *Actor
 
-func NewActor(id string) *ActorBuilder
-func (ab *ActorBuilder) WithHP(hp int) *ActorBuilder
-func (ab *ActorBuilder) WithAC(ac int) *ActorBuilder
-func (ab *ActorBuilder) WithAttribute(name string, value int) *ActorBuilder
-func (ab *ActorBuilder) WithAttributes(attrs map[string]int) *ActorBuilder
-func (ab *ActorBuilder) WithCombatModifier(name string, value int) *ActorBuilder
-func (ab *ActorBuilder) WithCombatModifiers(mods map[string]int) *ActorBuilder
-func (ab *ActorBuilder) Build() (*Actor, error)
-
-// Rolled stat methods - require WithRoller() first
-func (ab *ActorBuilder) WithRoller(roller *Roller) *ActorBuilder
-func (ab *ActorBuilder) WithRolledHP(roll string) *ActorBuilder
-func (ab *ActorBuilder) WithRolledAttribute(key string, roll string) *ActorBuilder
-func (ab *ActorBuilder) WithRolledAttributes(attrs map[string]string) *ActorBuilder
-
-// HP Management
-func (a *Actor) ID() string               // Normalized identifier
-func (a *Actor) HP() int                  // Current HP
-func (a *Actor) MaxHP() int               // Maximum HP
-func (a *Actor) SetHP(hp int) error
-func (a *Actor) SetMaxHP(maxHP int) error
-func (a *Actor) AddHP(amount int)         // Increase HP (won't exceed max)
+func (a *Actor) AddHP(amount int)         // Increase HP (won't exceed MaxHP)
 func (a *Actor) SubHP(amount int)         // Reduce HP (won't go below 0)
-func (a *Actor) ResetHP()                 // Restore to max HP
-func (a *Actor) IsKnockedOut() bool       // Returns true if HP <= 0
+func (a *Actor) ResetHP()                 // Restore to MaxHP
+func (a *Actor) IsKnockedOut() bool       // Returns true if HP == 0
 
-// AC and Initiative
-func (a *Actor) AC() int
-func (a *Actor) SetAC(ac int) error
-func (a *Actor) Initiative() int
-func (a *Actor) SetInitiative(init int)
-
-// Attribute Management 
-func (a *Actor) Attribute(key string) (int, bool)
-func (a *Actor) SetAttribute(key string, value int)
-func (a *Actor) HasAttribute(key string) bool
-func (a *Actor) RemoveAttribute(key string)
-func (a *Actor) IncrementAttribute(key string, amount int)
-func (a *Actor) DecrementAttribute(key string, amount int)
-
-// Combat Modifier Management 
-func (a *Actor) AddCombatModifier(name string, value int)
-func (a *Actor) RemoveCombatModifier(name string)
-
-// Roll Methods
 func (a *Actor) SkillCheck(skill string, roller *Roller) (*DiceManager, error)
 func (a *Actor) AttackRoll(roller *Roller) *DiceManager
 func (a *Actor) D100SkillCheck(skill string, roller *Roller) (*DiceManager, error)
@@ -192,148 +172,92 @@ func (a *Actor) D100SkillCheck(skill string, roller *Roller) (*DiceManager, erro
 
 ### Creating Actors
 
-Use the builder pattern to create actors with optional configuration:
-
 ```go
-// Basic actor with fixed stats
-fighter, _ := d20.NewActor("Ironpants").
-    WithHP(45).
-    WithAC(18).
-    Build()
+fighter := d20.NewActor("Ironpants")
+fighter.MaxHP, fighter.HP = 45, 45
+fighter.AC = 18
 
-// Actor with attributes and modifiers
-wizard, _ := d20.NewActor("Merlin").
-    WithHP(38).
-    WithAC(14).
-    WithAttributes(map[string]int{
-        "intelligence": 18,
-        "wisdom":       16,
-    }).
-    WithCombatModifiers(map[string]int{
-        "intelligence": 4,
-        "proficiency":  4,
-    }).
-    Build()
+wizard := d20.NewActor("Merlin")
+wizard.MaxHP, wizard.HP = 38, 38
+wizard.AC = 14
+wizard.Attributes = map[string]int{
+    "intelligence": 18,
+    "wisdom":       16,
+}
+wizard.CombatModifiers = []d20.Modifier{
+    d20.NewModifier("intelligence", 4),
+    d20.NewModifier("proficiency", 4),
+}
 
-// Actor with rolled stats using dice notation
+// Rolled stats: roll, then assign
 roller := d20.NewRandomRoller()
-barbarian, _ := d20.NewActor("Grog").
-    WithRoller(roller).
-    WithRolledHP("10d12+30").        // Roll hit points
-    WithRolledAttribute("strength", "3d6").    // Roll ability score
-    WithRolledAttributes(map[string]string{       // Roll multiple abilities
-        "dexterity":    "3d6",
-        "constitution": "3d6",
-    }).
-    WithAC(14).
-    WithAttribute("proficiency", 4).  // Mix rolled and fixed values
-    Build()
+hp, _ := roller.Roll("10d12+30")
+str, _ := roller.Roll("3d6")
+barbarian := d20.NewActor("Grog")
+barbarian.MaxHP, barbarian.HP = hp.Value, hp.Value
+barbarian.AC = 14
+barbarian.Attributes["strength"] = str.Value
+barbarian.Attributes["proficiency"] = 4
 ```
-
-**Rolled Stats**: Use `WithRoller()` to enable dice rolling during character creation. This is perfect for:
-- Traditional ability score rolling
-- Random HP generation
-- Variable starting stats
-- Quick NPC generation
-
-All rolled methods accept dice notation strings like `"3d6"`, `"2d8+3"`, `"1d20+5"`, etc.
 
 ### Combat Modifiers
 
-Combat modifiers apply to an actor's attack rolls. Add them during construction or modify at runtime:
+Combat modifiers apply to an actor's attack rolls. Mutate the slice directly:
 
 ```go
-actor.AddCombatModifier("strength", 4)
-actor.AddCombatModifier("proficiency", 3)
-actor.AddCombatModifier("magic_weapon", 1)
-actor.RemoveCombatModifier("magic_weapon")
+actor.CombatModifiers = append(actor.CombatModifiers, d20.NewModifier("strength", 4))
+actor.CombatModifiers = append(actor.CombatModifiers, d20.NewModifier("proficiency", 3))
+actor.CombatModifiers = append(actor.CombatModifiers, d20.NewModifier("magic_weapon", 1))
 ```
 
-Common combat modifiers include:
-- **Ability Modifiers**: Strength for melee, Dexterity for ranged/finesse weapons
-- **Proficiency Bonus**: If proficient with the weapon being used
-- **Equipment Bonuses**: Magic weapon bonuses (+1, +2, +3 weapons)
-- **Spell Effects**: Bless, Guidance, or other temporary bonuses
-- **Class Features**: Fighting styles, rage bonuses, etc.
+Common combat modifiers include ability modifiers, proficiency, magic weapons, spell effects (bless), and class features.
 
 ### Attributes
 
-The flexible attribute system supports standard D&D 5e ability scores and derived statistics:
+`Attributes` is a `map[string]int`. Typical keys:
 
 - **Core Abilities**: `strength`, `dexterity`, `constitution`, `intelligence`, `wisdom`, `charisma`
 - **Skills**: `athletics`, `stealth`, `perception`, `insight`, etc.
-- **Custom Attributes**: Any string key with integer value
+- **Custom**: any string key with an integer value
+
+```go
+actor.Attributes["strength"] = 16
+actor.Attributes["strength"] += 2  // temporary buff
+delete(actor.Attributes, "stealth")
+```
 
 ### Actor Roll Methods
 
-Actor roll methods return `*DiceManager` for flexible configuration:
+Actor roll methods return `*DiceManager` for further configuration:
 
 ```go
-// SkillCheck - Returns a DiceManager configured with the skill modifier
 builder, err := actor.SkillCheck("stealth", roller)
 if err != nil {
     // skill not found in attributes
 }
-result, _ := builder.Roll()                    // Normal roll
-result, _ := builder.WithAdvantage().Roll()    // With advantage
-result, _ := builder.WithDisadvantage().Roll() // With disadvantage
+result, _ := builder.Roll()
+result, _ = builder.WithAdvantage().Roll()
 
-// AttackRoll - Returns a DiceManager with all combat modifiers applied
-builder := actor.AttackRoll(roller)
-result, _ := builder.Roll()                             // Normal attack
-result, _ := builder.WithAdvantage().Roll()             // Attack with advantage
-result, _ := builder.WithModifier("bless", 1).Roll()    // Add temporary modifier
+builder = actor.AttackRoll(roller)
+result, _ = builder.Roll()
+result, _ = builder.WithAdvantage().Roll()
+result, _ = builder.WithModifier("bless", 1).Roll()
 
-// D100SkillCheck - Percentile system (Call of Cthulhu, etc.)
-builder, err := actor.D100SkillCheck("stealth", roller)
-outcome, err := builder.RollPercentile()
-skill, _ := actor.Attribute("stealth")
-success := outcome.Value <= skill
+builder, err = actor.D100SkillCheck("stealth", roller)
+outcome, _ := builder.RollPercentile()
+success := outcome.Value <= actor.Attributes["stealth"]
 ```
-
-#### Advantage/Disadvantage Mechanics
 
 Advantage and disadvantage are configured on the `DiceManager`:
 
-- **Advantage**: Rolls 2 dice, uses higher, shows both in `DiceRolls` (e.g. two `{Faces:20, Result:…}`)
+- **Advantage**: Rolls 2 dice, uses higher, shows both in `DiceRolls`
 - **Disadvantage**: Rolls 2 dice, uses lower, shows both in `DiceRolls`
-- **Normal**: Rolls standard number of dice
+- **Normal**: Rolls the standard number of dice
 
-This system is common in 5e-style play for attack rolls, skill checks, and saving throws. The library returns all dice rolled for transparency.
+d100/percentile rolls:
 
-#### D100 System Support
-
-The library supports d100/percentile rolls in two ways:
-
-- **`Roll("1d100")`**: Uniform 1–100 via dice notation (same as any other die).
-- **`Dice(2, 10).RollPercentile()` / `D100SkillCheck`**: Call of Cthulhu-style tens + ones (`00` = 100). Requires 2d10 (or unset count/faces to assume 2d10). `DiceRolls` is two `DieRoll`s with `Faces: 10`.
-
-### Skill Checks
-
-Skill checks use the actor's attribute values and return configurable `DiceManager`:
-
-```go
-// D&D 5e skill checks (d20 + modifiers)
-builder, _ := actor.SkillCheck("stealth", roller)
-result, _ := builder.Roll()  // Normal check
-
-builder, _ = actor.SkillCheck("athletics", roller)
-result, _ = builder.WithAdvantage().Roll()  // With advantage
-
-builder, _ = actor.SkillCheck("perception", roller)
-result, _ = builder.WithDisadvantage().Roll()  // With disadvantage
-
-// Call of Cthulhu skill checks (d100, roll under skill value)
-builder, _ := investigator.D100SkillCheck("stealth", roller)
-outcome, _ := builder.RollPercentile()
-skillValue, _ := investigator.Attribute("stealth")
-success := outcome.Value <= skillValue
-
-// Check success for d100 systems
-if success {
-    fmt.Printf("Skill check succeeded with %d (needed ≤ %d)", outcome.Value, skillValue)
-}
-```
+- **`Roll("1d100")`**: Uniform 1–100 via dice notation.
+- **`Dice(2, 10).RollPercentile()` / `D100SkillCheck`**: Call of Cthulhu-style tens + ones (`00` = 100).
 
 ## Game systems
 
@@ -374,7 +298,7 @@ fmt.Println(result.Detail()) // still a full RollOutcome
 
 ### Structured input — DiceManager
 
-Use `Dice(count, faces)` when you need named modifiers, advantage/disadvantage, or percentile:
+Use `Dice(count, faces)` or `DiceExpr(notation)` when you need named modifiers, advantage/disadvantage, or percentile:
 
 ```go
 roller := d20.NewRoller(time.Now().UnixNano())
@@ -386,9 +310,9 @@ result, _ := roller.Dice(1, 20).
 fmt.Printf("Attack: %d\n", result.Value)
 fmt.Println(result.Detail())
 
-result, _ = roller.Dice(1, 20).
+result, _ = roller.DiceExpr("2d20+1").
     WithAdvantage().
-    WithModifier("dexterity", 4).
+    WithModifier("bless", 1).
     Roll()
 fmt.Printf("Roll: %d (from dice: %v)\n", result.Value, result.DiceRolls)
 
@@ -401,208 +325,97 @@ fmt.Printf("Percentile: %d (digits: %v)\n", result.Value, result.DiceRolls)
 ```go
 roller := d20.NewRoller(time.Now().UnixNano())
 
-// Create a character using the builder pattern
-fighter, _ := d20.NewActor("Ironpants").
-    WithHP(45).
-    WithAC(18).
-    WithAttributes(map[string]int{
-        "strength":     16,
-        "dexterity":    14,
-        "constitution": 15,
-        "athletics":    5,  // includes proficiency
-        "stealth":      2,  // dex modifier only
-    }).
-    WithCombatModifiers(map[string]int{
-        "strength":     3,
-        "proficiency":  3,
-        "magic_weapon": 1,
-    }).
-    Build()
+fighter := d20.NewActor("Ironpants")
+fighter.MaxHP, fighter.HP = 45, 45
+fighter.AC = 18
+fighter.Attributes = map[string]int{
+    "strength":     16,
+    "dexterity":    14,
+    "constitution": 15,
+    "athletics":    5,
+    "stealth":      2,
+}
+fighter.CombatModifiers = []d20.Modifier{
+    d20.NewModifier("strength", 3),
+    d20.NewModifier("proficiency", 3),
+    d20.NewModifier("magic_weapon", 1),
+}
 
-// Or create a simple actor and modify it
-wizard, _ := d20.NewActor("Merlin").
-    WithHP(22).
-    WithAC(12).
-    Build()
+wizard := d20.NewActor("Merlin")
+wizard.MaxHP, wizard.HP = 22, 22
+wizard.AC = 12
+wizard.Attributes["intelligence"] = 18
+wizard.Attributes["wisdom"] = 14
+wizard.CombatModifiers = append(wizard.CombatModifiers, d20.NewModifier("intelligence", 4))
 
-wizard.SetAttribute("intelligence", 18)
-wizard.SetAttribute("wisdom", 14)
-wizard.AddCombatModifier("intelligence", 4)
+hp, _ := roller.Roll("12d12+48")
+barbarian := d20.NewActor("Grog")
+barbarian.MaxHP, barbarian.HP = hp.Value, hp.Value
+barbarian.AC = 14
+barbarian.Attributes["proficiency"] = 5
+for _, key := range []string{"strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"} {
+    out, _ := roller.Roll("3d6")
+    barbarian.Attributes[key] = out.Value
+}
 
-// Create a character with rolled stats
-barbarian, _ := d20.NewActor("Grog").
-    WithRoller(roller).
-    WithRolledHP("12d12+48").        // Roll for hit points
-    WithRolledAttributes(map[string]string{
-        "strength":     "3d6",       // Roll ability scores
-        "dexterity":    "3d6",
-        "constitution": "3d6",
-        "intelligence": "3d6",       // Dump stat
-        "wisdom":       "3d6",
-        "charisma":     "3d6",
-    }).
-    WithAC(14).
-    WithAttribute("proficiency", 5). // Mix rolled and fixed
-    Build()
-
-// Make an attack roll using the actor's combat modifiers
 result, _ := fighter.AttackRoll(roller).Roll()
 fmt.Printf("Attack: %d\n", result.Value)
 
-// Attack with advantage (flanking, help action, etc.)
 result, _ = fighter.AttackRoll(roller).WithAdvantage().Roll()
 fmt.Printf("Attack with advantage: %d (dice: %v)\n", result.Value, result.DiceRolls)
 
-// Attack with additional situational modifiers
 result, _ = fighter.AttackRoll(roller).
     WithModifier("bless", 1).
     WithModifier("cover_penalty", -2).
     Roll()
 
-// Perform skill checks
 builder, _ := fighter.SkillCheck("stealth", roller)
 result, _ = builder.Roll()
 
 builder, _ = fighter.SkillCheck("athletics", roller)
 result, _ = builder.WithAdvantage().Roll()
 
-// HP management
 fighter.SubHP(15)
 if !fighter.IsKnockedOut() {
-    fmt.Printf("Fighter has %d/%d HP remaining\n", fighter.HP(), fighter.MaxHP())
+    fmt.Printf("Fighter has %d/%d HP remaining\n", fighter.HP, fighter.MaxHP)
 }
 fighter.AddHP(8)
 
-// Level up - increase max HP
-fighter.SetMaxHP(50)
-fighter.ResetHP() // Full heal after rest
+fighter.MaxHP = 50
+fighter.ResetHP()
 
-// Attribute changes
-fighter.IncrementAttribute("strength", 2) 
-fighter.DecrementAttribute("dexterity", 1) 
+fighter.Attributes["strength"] += 2
+fighter.Attributes["dexterity"] -= 1
 ```
 
 ### D100 System Usage
 
 ```go
-// Create a Call of Cthulhu investigator
-investigator, _ := d20.NewActor("Detective Morgan").
-    WithHP(12).
-    WithAC(10).
-    WithAttributes(map[string]int{
-        "stealth":     45,  // 45% skill
-        "fighting":    60,  // 60% skill  
-        "firearms":    25,  // 25% skill
-        "spot_hidden": 70,  // 70% skill
-        "sanity":      65,  // Current sanity points
-    }).
-    Build()
+investigator := d20.NewActor("Detective Morgan")
+investigator.MaxHP, investigator.HP = 12, 12
+investigator.AC = 10
+investigator.Attributes = map[string]int{
+    "stealth":     45,
+    "fighting":    60,
+    "firearms":    25,
+    "spot_hidden": 70,
+    "sanity":      65,
+}
 
-// Attribute changes - sanity loss and recovery
-investigator.IncrementAttribute("sanity", 1)  // Therapy or rest
-investigator.DecrementAttribute("sanity", 3)  // Witnessed something horrifying     
+investigator.Attributes["sanity"] += 1
+investigator.Attributes["sanity"] -= 3
 
-// Perform d100 skill checks
 builder, _ := investigator.D100SkillCheck("stealth", roller)
 outcome, _ := builder.RollPercentile()
-skillValue, _ := investigator.Attribute("stealth")
+skillValue := investigator.Attributes["stealth"]
 if outcome.Value <= skillValue {
     fmt.Printf("Stealth succeeded: rolled %d ≤ %d\n", outcome.Value, skillValue)
 } else {
     fmt.Printf("Stealth failed: rolled %d\n", outcome.Value)
 }
 
-// Combat using Fighting skill
 builder, _ = investigator.D100SkillCheck("fighting", roller)
 outcome, _ = builder.RollPercentile()
-```
-
-## Character Creation Workflows
-
-The library supports multiple character creation methods:
-
-### Traditional Rolled Stats (3d6, etc.)
-
-```go
-roller := d20.NewRandomRoller()
-
-// Classic 3d6 in order
-fighter, _ := d20.NewActor("Hrothgar").
-    WithRoller(roller).
-    WithRolledAttributes(map[string]string{
-        "strength":     "3d6",
-        "dexterity":    "3d6",
-        "constitution": "3d6",
-        "intelligence": "3d6",
-        "wisdom":       "3d6",
-        "charisma":     "3d6",
-    }).
-    WithRolledHP("1d10").
-    WithAC(16).
-    Build()
-
-// Classic 3d6 in order (keep-highest notation is not implemented; see Future Enhancements)
-wizard, _ := d20.NewActor("Gandalf").
-    WithRoller(roller).
-    WithRolledAttributes(map[string]string{
-        "strength":     "3d6",
-        "dexterity":    "3d6",
-        "constitution": "3d6",
-        "intelligence": "3d6",
-        "wisdom":       "3d6",
-        "charisma":     "3d6",
-    }).
-    WithRolledHP("1d6+1").
-    WithAC(12).
-    Build()
-```
-
-### Point Buy / Standard Array (Fixed Stats)
-
-```go
-// Point buy or standard array (15, 14, 13, 12, 10, 8)
-paladin, _ := d20.NewActor("Arthas").
-    WithHP(44).  // Fixed HP (average per level)
-    WithAC(18).
-    WithAttributes(map[string]int{
-        "strength":     15,
-        "dexterity":    10,
-        "constitution": 14,
-        "intelligence": 8,
-        "wisdom":       12,
-        "charisma":     13,
-    }).
-    Build()
-```
-
-### Hybrid Approach (Mix Rolled and Fixed)
-
-```go
-// Roll HP but use point buy for stats
-ranger, _ := d20.NewActor("Aragorn").
-    WithRoller(roller).
-    WithRolledHP("10d10+20").  // Rolled HP for excitement
-    WithAC(17).
-    WithAttributes(map[string]int{
-        "strength":     15,     // Point buy stats
-        "dexterity":    16,
-        "constitution": 14,
-        "intelligence": 10,
-        "wisdom":       14,
-        "charisma":     12,
-    }).
-    Build()
-
-// Or roll only dump stats
-minmaxer, _ := d20.NewActor("That Guy").
-    WithRoller(roller).
-    WithHP(45).
-    WithAC(18).
-    WithAttribute("strength", 18).     // Fixed primary stat
-    WithAttribute("constitution", 16). // Fixed important stat
-    WithRolledAttribute("intelligence", "3d6"). // Roll dump stat for fun
-    WithRolledAttribute("charisma", "3d6").     // Roll dump stat for fun
-    Build()
 ```
 
 ## Future Enhancements
