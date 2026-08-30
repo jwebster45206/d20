@@ -351,12 +351,15 @@ Call of Cthulhu® is a registered trademark of Chaosium Inc. This library does n
 
 ## Examples
 
-### Basic Dice Rolling
+Both APIs return a structured `RollOutcome` (`Value`, `DiceRolls`, `Modifiers`, `Detail()`). The difference is only how you *request* the roll.
+
+### Simple input — dice notation
+
+Use `Roll(notation)` when a string is enough (optional `+`/`-` modifier in the notation):
 
 ```go
 roller := d20.NewRoller(time.Now().UnixNano())
 
-// Dice notation shorthand - quick and simple
 result, _ := roller.Roll("1d20")
 fmt.Printf("Rolled: %d\n", result.Value)
 
@@ -366,38 +369,31 @@ fmt.Printf("With modifier: %d\n", result.Value)
 result, _ = roller.Roll("2d6+3")
 fmt.Printf("Damage: %d\n", result.Value)
 
-// Fluent API - more control and options
-result, _ = roller.Dice(1, 20).Roll()
-fmt.Printf("Rolled: %d\n", result.Value)
+fmt.Println(result.Detail()) // still a full RollOutcome
+```
 
-// Attack roll with modifiers
-result, _ = roller.Dice(1, 20).
+### Structured input — DiceManager
+
+Use `Dice(count, faces)` when you need named modifiers, advantage/disadvantage, or percentile:
+
+```go
+roller := d20.NewRoller(time.Now().UnixNano())
+
+result, _ := roller.Dice(1, 20).
     WithModifier("strength", 5).
     WithModifier("proficiency", 3).
     Roll()
 fmt.Printf("Attack: %d\n", result.Value)
+fmt.Println(result.Detail())
 
-// Using a map for multiple modifiers
-result, _ = roller.Dice(1, 20).
-    WithModifiers(map[string]int{
-        "strength":    5,
-        "proficiency": 3,
-    }).
-    Roll()
-
-// Damage roll
-result, _ = roller.Dice(1, 8).
-    WithModifier("strength", 3).
-    Roll()
-fmt.Printf("Damage: %d\n", result.Value)
-
-// Roll with advantage (shows all dice)
 result, _ = roller.Dice(1, 20).
     WithAdvantage().
     WithModifier("dexterity", 4).
     Roll()
 fmt.Printf("Roll: %d (from dice: %v)\n", result.Value, result.DiceRolls)
-// Output: Roll: 18 (from dice: [15, 18])
+
+result, _ = roller.Dice(2, 10).RollPercentile()
+fmt.Printf("Percentile: %d (digits: %v)\n", result.Value, result.DiceRolls)
 ```
 
 ### Actor Usage
