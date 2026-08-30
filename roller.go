@@ -3,7 +3,7 @@ package d20
 import (
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"regexp"
 	"strconv"
 	"strings"
@@ -32,7 +32,7 @@ type Roller struct {
 // for non-deterministic random rolling.
 func NewRoller(seed int64) *Roller {
 	return &Roller{
-		rng: rand.New(rand.NewSource(seed)),
+		rng: rand.New(rand.NewPCG(uint64(seed), 0)),
 	}
 }
 

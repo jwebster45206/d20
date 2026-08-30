@@ -73,6 +73,42 @@ func TestActor_HPHelpers(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "SubHP ignores non-positive",
+			setup: func(a *Actor) {
+				a.SubHP(0)
+				a.SubHP(-5)
+			},
+			check: func(t *testing.T, a *Actor) {
+				if a.HP != 20 {
+					t.Errorf("HP = %d, want 20", a.HP)
+				}
+			},
+		},
+		{
+			name: "AddHP ignores non-positive",
+			setup: func(a *Actor) {
+				a.HP = 10
+				a.AddHP(0)
+				a.AddHP(-5)
+			},
+			check: func(t *testing.T, a *Actor) {
+				if a.HP != 10 {
+					t.Errorf("HP = %d, want 10", a.HP)
+				}
+			},
+		},
+		{
+			name: "negative HP is knocked out",
+			setup: func(a *Actor) {
+				a.HP = -1
+			},
+			check: func(t *testing.T, a *Actor) {
+				if !a.IsKnockedOut() {
+					t.Error("IsKnockedOut = false, want true for HP < 0")
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -284,10 +320,10 @@ func TestActor_Rolls(t *testing.T) {
 			if out.Value < tt.valueMin || out.Value > tt.valueMax {
 				t.Errorf("Value %d not in [%d, %d]", out.Value, tt.valueMin, tt.valueMax)
 			}
-			if tt.diceCount >= 0 && len(out.DiceRolls) != tt.diceCount {
+			if len(out.DiceRolls) != tt.diceCount {
 				t.Errorf("DiceRolls len = %d, want %d", len(out.DiceRolls), tt.diceCount)
 			}
-			if tt.wantMods >= 0 && len(out.Modifiers) != tt.wantMods {
+			if len(out.Modifiers) != tt.wantMods {
 				t.Errorf("Modifiers len = %d, want %d", len(out.Modifiers), tt.wantMods)
 			}
 			if tt.detailRE != "" && !regexp.MustCompile(tt.detailRE).MatchString(out.Detail()) {

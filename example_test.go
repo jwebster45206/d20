@@ -13,7 +13,7 @@ func Example_basicRoll() {
 
 	fmt.Printf("Rolled: %d\n", result.Value)
 	// Output:
-	// Rolled: 6
+	// Rolled: 18
 }
 
 // Example_diceExpr shows building a roll from notation, then chaining fluent modifiers.
@@ -49,26 +49,22 @@ func Example_parseNotation() {
 func Example_diceNotation() {
 	roller := d20.NewRoller(42)
 
-	// Simple notation
 	result, _ := roller.Roll("1d20")
 	fmt.Printf("1d20: %d\n", result.Value)
 
-	// Shorthand (assumes 1d)
 	result, _ = roller.Roll("d20")
 	fmt.Printf("d20: %d\n", result.Value)
 
-	// With modifier
 	result, _ = roller.Roll("1d20+3")
 	fmt.Printf("1d20+3: %d\n", result.Value)
 
-	// Multiple dice
 	result, _ = roller.Roll("2d6+2")
 	fmt.Printf("2d6+2: %d\n", result.Value)
 
 	// Output:
-	// 1d20: 6
-	// d20: 8
-	// 1d20+3: 12
+	// 1d20: 18
+	// d20: 20
+	// 1d20+3: 6
 	// 2d6+2: 5
 }
 
@@ -81,36 +77,22 @@ func Example_rollWithModifier() {
 
 	fmt.Printf("Roll: %d\n", result.Value)
 	// Output:
-	// Roll: 9
+	// Roll: 21
 }
 
-// Example_rollWithMultipleModifiers shows adding multiple modifiers.
+// Example_rollWithMultipleModifiers shows adding multiple modifiers, including a penalty.
 func Example_rollWithMultipleModifiers() {
 	roller := d20.NewRoller(42)
 	result, _ := roller.Dice(1, 20).
-		WithModifiers(map[string]int{
-			"strength": 3,
-			"magic":    2,
-		}).
+		WithModifier("strength", 3).
+		WithModifier("cover", -2).
 		Roll()
 
 	fmt.Printf("Roll: %d\n", result.Value)
+	fmt.Println(result.Detail())
 	// Output:
-	// Roll: 11
-}
-
-// Example_withModifiersMap shows adding modifiers from a map.
-func Example_withModifiersMap() {
-	roller := d20.NewRoller(42)
-	mods := map[string]int{
-		"strength":    3,
-		"proficiency": 2,
-	}
-	result, _ := roller.Dice(1, 20).WithModifiers(mods).Roll()
-
-	fmt.Printf("Roll: %d\n", result.Value)
-	// Output:
-	// Roll: 11
+	// Roll: 19
+	// Rolled 1d20... 18; +3 strength, -2 cover; *Result: 19*
 }
 
 // Example_rollWithAdvantage shows rolling with advantage.
@@ -122,7 +104,7 @@ func Example_rollWithAdvantage() {
 
 	fmt.Printf("Roll: %d, Dice: %v\n", result.Value, result.DiceRolls)
 	// Output:
-	// Roll: 8, Dice: [{20 6} {20 8}]
+	// Roll: 20, Dice: [{20 18} {20 20}]
 }
 
 // Example_disadvantage shows rolling with disadvantage (2 dice, take lower).
@@ -132,7 +114,7 @@ func Example_disadvantage() {
 
 	fmt.Printf("Rolled: %d (from %v)\n", result.Value, result.DiceRolls)
 	// Output:
-	// Rolled: 6 (from [{20 6} {20 8}])
+	// Rolled: 18 (from [{20 18} {20 20}])
 }
 
 // Example_advantageWithModifier shows combining advantage with modifiers.
@@ -145,29 +127,7 @@ func Example_advantageWithModifier() {
 
 	fmt.Printf("Roll: %d\n", result.Value)
 	// Output:
-	// Roll: 12
-}
-
-// Example_multipleDice shows rolling multiple dice.
-func Example_multipleDice() {
-	roller := d20.NewRoller(42)
-	result, _ := roller.Dice(3, 6).Roll()
-
-	fmt.Printf("Total: %d (rolls: %v)\n", result.Value, result.DiceRolls)
-	// Output:
-	// Total: 15 (rolls: [{6 6} {6 6} {6 3}])
-}
-
-// Example_damageDice shows a typical damage roll.
-func Example_damageDice() {
-	roller := d20.NewRoller(42)
-	result, _ := roller.Dice(2, 6).
-		WithModifier("strength", 3).
-		Roll()
-
-	fmt.Printf("Damage: %d\n", result.Value)
-	// Output:
-	// Damage: 15
+	// Roll: 24
 }
 
 // Example_newActor shows creating an actor and setting fields.
@@ -185,53 +145,22 @@ func Example_newActor() {
 	// AC: 18
 }
 
-// Example_actorFields shows setting attributes and modifiers.
-func Example_actorFields() {
-	actor := d20.NewActor("Fighter")
-	actor.MaxHP, actor.HP = 50, 50
-	actor.AC = 18
-	actor.Attributes["strength"] = 16
-	actor.Attributes["dexterity"] = 14
-	actor.Modifiers["strength"] = 3
-	actor.Modifiers["striking"] = 2
-
-	fmt.Printf("HP: %d\n", actor.MaxHP)
-	fmt.Printf("Strength: %d\n", actor.Attributes["strength"])
-	// Output:
-	// HP: 50
-	// Strength: 16
-}
-
-// Example_actorSkillCheck shows making a skill check.
+// Example_actorSkillCheck shows making a skill check with a stored skill bonus.
 func Example_actorSkillCheck() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Rogue")
 	actor.MaxHP, actor.HP = 30, 30
 	actor.AC = 15
-	actor.Attributes["dexterity"] = 18
+	actor.Attributes["athletics"] = 5
 
-	builder, _ := actor.SkillCheck("dexterity", roller)
+	builder, _ := actor.SkillCheck("athletics", roller)
 	result, _ := builder.Roll()
 
 	fmt.Printf("Skill check: %d\n", result.Value)
+	fmt.Println(result.Detail())
 	// Output:
-	// Skill check: 24
-}
-
-// Example_actorSkillCheckAdvantage shows a skill check with advantage.
-func Example_actorSkillCheckAdvantage() {
-	roller := d20.NewRoller(42)
-	actor := d20.NewActor("Bard")
-	actor.MaxHP, actor.HP = 38, 38
-	actor.AC = 14
-	actor.Attributes["charisma"] = 16
-
-	builder, _ := actor.SkillCheck("charisma", roller)
-	result, _ := builder.WithAdvantage().Roll()
-
-	fmt.Printf("Check: %d\n", result.Value)
-	// Output:
-	// Check: 24
+	// Skill check: 23
+	// Rolled 1d20... 18; +5 athletics; *Result: 23*
 }
 
 // Example_actorStrikeRoll shows making a strike roll.
@@ -247,23 +176,7 @@ func Example_actorStrikeRoll() {
 
 	fmt.Printf("Strike: %d\n", result.Value)
 	// Output:
-	// Strike: 13
-}
-
-// Example_actorStrikeAdvantage shows a strike with advantage.
-func Example_actorStrikeAdvantage() {
-	roller := d20.NewRoller(42)
-	actor := d20.NewActor("Barbarian")
-	actor.MaxHP, actor.HP = 52, 52
-	actor.AC = 15
-	actor.Modifiers["strength"] = 5
-	actor.Modifiers["striking"] = 3
-
-	result, _ := actor.StrikeRoll(roller, "strength", "striking").WithAdvantage().Roll()
-
-	fmt.Printf("Strike: %d\n", result.Value)
-	// Output:
-	// Strike: 16
+	// Strike: 25
 }
 
 // Example_hpManagement shows managing actor hit points.
@@ -321,6 +234,7 @@ func Example_attributes() {
 }
 
 // Example_strikeModifiers shows wiring modifiers and applying a subset on a strike.
+// Bless is on the DiceManager only; a new StrikeRoll does not keep it.
 func Example_strikeModifiers() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Paladin")
@@ -331,18 +245,18 @@ func Example_strikeModifiers() {
 	actor.Modifiers["damage"] = 2
 
 	result, _ := actor.StrikeRoll(roller, "strength", "striking").Roll()
-	fmt.Printf("Normal: %d\n", result.Value)
+	fmt.Println(result.Detail())
 
 	result, _ = actor.StrikeRoll(roller, "strength", "striking").WithModifier("bless", 1).Roll()
-	fmt.Printf("With bless: %d\n", result.Value)
+	fmt.Println(result.Detail())
 
 	result, _ = actor.StrikeRoll(roller, "strength", "striking").Roll()
-	fmt.Printf("After bless: %d\n", result.Value)
+	fmt.Println(result.Detail())
 
 	// Output:
-	// Normal: 13
-	// With bless: 16
-	// After bless: 16
+	// Rolled 1d20... 18; +4 strength, +3 striking; *Result: 25*
+	// Rolled 1d20... 20; +4 strength, +3 striking, +1 bless; *Result: 28*
+	// Rolled 1d20... 3; +4 strength, +3 striking; *Result: 10*
 }
 
 // Example_idNormalization shows automatic ID normalization to snake_case.
@@ -359,50 +273,6 @@ func Example_idNormalization() {
 	// goblin_3
 }
 
-// Example_negativeModifiers shows using negative modifiers as penalties.
-func Example_negativeModifiers() {
-	roller := d20.NewRoller(42)
-	result, _ := roller.Dice(1, 20).
-		WithModifier("exhaustion", -2).
-		WithModifier("poison", -1).
-		Roll()
-
-	fmt.Printf("Roll: %d\n", result.Value)
-	// Output:
-	// Roll: 3
-}
-
-// Example_withAttributesMap shows assigning attributes from a map.
-func Example_withAttributesMap() {
-	actor := d20.NewActor("Fighter")
-	actor.MaxHP, actor.HP = 50, 50
-	actor.AC = 18
-	actor.Attributes = map[string]int{
-		"strength":     16,
-		"dexterity":    14,
-		"constitution": 15,
-	}
-
-	fmt.Printf("STR: %d, DEX: %d\n", actor.Attributes["strength"], actor.Attributes["dexterity"])
-	// Output:
-	// STR: 16, DEX: 14
-}
-
-// Example_strikeRollKeys shows selecting which modifiers apply to a strike.
-func Example_strikeRollKeys() {
-	roller := d20.NewRoller(42)
-	actor := d20.NewActor("Fighter")
-	actor.MaxHP, actor.HP = 50, 50
-	actor.AC = 18
-	actor.Modifiers["strength"] = 4
-	actor.Modifiers["striking"] = 3
-
-	result, _ := actor.StrikeRoll(roller, "strength", "striking").Roll()
-	fmt.Printf("Strike: %d\n", result.Value)
-	// Output:
-	// Strike: 13
-}
-
 // Example_rolledStats shows creating an actor with rolled stats.
 func Example_rolledStats() {
 	roller := d20.NewRoller(42)
@@ -417,70 +287,6 @@ func Example_rolledStats() {
 	fmt.Printf("HP: %d\n", actor.MaxHP)
 	fmt.Printf("Strength: %d\n", actor.Attributes["strength"])
 	// Output:
-	// HP: 92
-	// Strength: 13
-}
-
-// Example_rolledCharacterCreation shows creating a complete character with rolled stats.
-func Example_rolledCharacterCreation() {
-	roller := d20.NewRoller(42)
-
-	hp, _ := roller.Roll("10d10+20")
-	actor := d20.NewActor("Thorin")
-	actor.MaxHP, actor.HP = hp.Value, hp.Value
-	actor.AC = 18
-	actor.Attributes["proficiency"] = 4
-
-	// Roll abilities in a stable order (sorted keys)
-	for _, key := range []string{"charisma", "constitution", "dexterity", "intelligence", "strength", "wisdom"} {
-		out, _ := roller.Roll("3d6")
-		actor.Attributes[key] = out.Value
-	}
-
-	fmt.Printf("HP: %d\n", actor.MaxHP)
-	fmt.Printf("STR: %d\n", actor.Attributes["strength"])
-	fmt.Printf("DEX: %d\n", actor.Attributes["dexterity"])
-	// Output:
-	// HP: 82
-	// STR: 14
-	// DEX: 15
-}
-
-// Example_mixedStaticAndRolled shows combining fixed values with rolled stats.
-func Example_mixedStaticAndRolled() {
-	roller := d20.NewRoller(42)
-
-	hp, _ := roller.Roll("8d10+24")
-	cha, _ := roller.Roll("3d6")
-
-	actor := d20.NewActor("Gimli")
-	actor.MaxHP, actor.HP = hp.Value, hp.Value
-	actor.AC = 18
-	actor.Attributes["strength"] = 16
-	actor.Attributes["constitution"] = 16
-	actor.Attributes["charisma"] = cha.Value
-
-	fmt.Printf("HP: %d\n", actor.MaxHP)
-	fmt.Printf("STR: %d, CHA: %d\n", actor.Attributes["strength"], actor.Attributes["charisma"])
-	// Output:
-	// HP: 73
-	// STR: 16, CHA: 7
-}
-
-// Example_rolledCombatStats shows rolling combat-related values.
-func Example_rolledCombatStats() {
-	roller := d20.NewRoller(42)
-
-	barbarian := d20.NewActor("Grog")
-	barbarian.MaxHP, barbarian.HP = 95, 95
-	barbarian.AC = 14
-	barbarian.Attributes["strength"] = 18
-
-	rage, _ := roller.Dice(1, 4).Roll()
-	barbarian.Modifiers["rage"] = rage.Value
-
-	result, _ := barbarian.StrikeRoll(roller, "rage").Roll()
-	fmt.Printf("Raging strike includes +%d rage: %d total\n", rage.Value, result.Value)
-	// Output:
-	// Raging strike includes +2 rage: 10 total
+	// HP: 95
+	// Strength: 11
 }

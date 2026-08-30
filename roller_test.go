@@ -114,7 +114,7 @@ func TestRoller_Roll(t *testing.T) {
 			if out.Value < tt.valueMin || out.Value > tt.valueMax {
 				t.Errorf("Value %d not in [%d, %d]", out.Value, tt.valueMin, tt.valueMax)
 			}
-			if tt.diceCount >= 0 && len(out.DiceRolls) != tt.diceCount {
+			if len(out.DiceRolls) != tt.diceCount {
 				t.Errorf("DiceRolls len = %d, want %d", len(out.DiceRolls), tt.diceCount)
 			}
 			if tt.detailRE != "" && !regexp.MustCompile(tt.detailRE).MatchString(out.Detail()) {

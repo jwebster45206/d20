@@ -40,8 +40,8 @@ type Actor struct {
 	HP         int            // Current Hit Points
 	AC         int            // Armor Class
 	Initiative int            // Initiative order (situational)
-	Attributes map[string]int // Scores and skills — not roll bonuses
-	Modifiers  map[string]int // Caller-wired bonuses; not derived from Attributes
+	Attributes map[string]int // Caller-owned numbers (ability scores or skill bonuses). Keys are lowercase.
+	Modifiers  map[string]int // Caller-wired roll bonuses; not derived from Attributes. Keys are lowercase.
 }
 
 // NewActor creates an Actor with a normalized ID and initialized maps.
@@ -54,15 +54,23 @@ func NewActor(id string) *Actor {
 }
 
 // SubHP reduces current HP by the specified amount. HP will not go below 0.
-func (a *Actor) SubHP(damage int) {
-	a.HP -= damage
+// Non-positive amounts are ignored.
+func (a *Actor) SubHP(amount int) {
+	if amount <= 0 {
+		return
+	}
+	a.HP -= amount
 	if a.HP < 0 {
 		a.HP = 0
 	}
 }
 
 // AddHP increases current HP by the specified amount. HP will not exceed MaxHP.
+// Non-positive amounts are ignored.
 func (a *Actor) AddHP(amount int) {
+	if amount <= 0 {
+		return
+	}
 	a.HP += amount
 	if a.HP > a.MaxHP {
 		a.HP = a.MaxHP
@@ -74,13 +82,15 @@ func (a *Actor) ResetHP() {
 	a.HP = a.MaxHP
 }
 
-// IsKnockedOut returns true if the actor has 0 HP.
+// IsKnockedOut returns true if the actor has 0 or fewer HP.
 func (a *Actor) IsKnockedOut() bool {
-	return a.HP == 0
+	return a.HP <= 0
 }
 
-// SkillCheck creates a DiceManager for a skill check using D&D 5e conventions (1d20 + skill modifier).
-// The skill value is looked up from Attributes (key is lowercased). Returns an error if missing.
+// SkillCheck creates a DiceManager for a skill check (1d20 + the stored attribute value).
+// The library does not derive 5e ability modifiers; callers store the bonus they want added.
+// The skill name is lowercased for lookup; map keys are lowercase by convention.
+// Returns an error if the skill is missing.
 //
 // Example:
 //
@@ -100,9 +110,10 @@ func (a *Actor) SkillCheck(skill string, roller *Roller) (*DiceManager, error) {
 	return roller.Dice(1, 20).WithModifier(skill, skillValue), nil
 }
 
-// StrikeRoll creates a DiceManager for a strike (attack) roll.
-// Uses D&D 5e conventions (1d20). Only the named modifier keys are applied;
-// missing keys are skipped. Situational bonuses go on the returned DiceManager.
+// StrikeRoll creates a DiceManager for a strike (attack) roll (1d20).
+// Only the named modifier keys are applied; missing keys are skipped.
+// Key names are lowercased for lookup; map keys are lowercase by convention.
+// Situational bonuses go on the returned DiceManager.
 //
 // Example:
 //
@@ -121,6 +132,7 @@ func (a *Actor) StrikeRoll(roller *Roller, keys ...string) *DiceManager {
 }
 
 // D100SkillCheck returns a 2d10 DiceManager for a roll-under skill check.
+// The skill name is lowercased for lookup; map keys are lowercase by convention.
 // Errors if the skill is missing. Compare outcome.Value to Attributes[skill] for success.
 //
 //	builder, _ := actor.D100SkillCheck("stealth", roller)

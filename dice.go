@@ -8,7 +8,6 @@ type DiceManager struct {
 	DieFaces      uint
 	Modifiers     []Modifier
 	AdvantageType AdvantageType
-	Results       []RollOutcome // last successful roll, or empty after a failed roll
 
 	roller *Roller
 	err    error
@@ -17,19 +16,17 @@ type DiceManager struct {
 // Error returns the error from the last failed parse or terminal roll.
 // It is nil after a successful Roll or RollPercentile, and after construction
 // via Dice with no subsequent failure.
-func (rb *DiceManager) Error() error {
-	return rb.err
+func (dm *DiceManager) Error() error {
+	return dm.err
 }
 
-func (rb *DiceManager) doneWithErr(err error) (RollOutcome, error) {
-	rb.Results = nil
-	rb.err = err
+func (dm *DiceManager) fail(err error) (RollOutcome, error) {
+	dm.err = err
 	return RollOutcome{}, err
 }
 
-func (rb *DiceManager) done(outcome RollOutcome) (RollOutcome, error) {
-	rb.Results = []RollOutcome{outcome}
-	rb.err = nil
+func (dm *DiceManager) succeed(outcome RollOutcome) (RollOutcome, error) {
+	dm.err = nil
 	return outcome, nil
 }
 
@@ -79,9 +76,9 @@ func (r *Roller) DiceExpr(notation string) *DiceManager {
 // Example:
 //
 //	roller.Dice(1, 20).WithModifier("strength", 3).WithModifier("proficiency", 2).Roll()
-func (rb *DiceManager) WithModifier(name string, value int) *DiceManager {
-	rb.Modifiers = append(rb.Modifiers, NewModifier(name, value))
-	return rb
+func (dm *DiceManager) WithModifier(name string, value int) *DiceManager {
+	dm.Modifiers = append(dm.Modifiers, NewModifier(name, value))
+	return dm
 }
 
 // WithModifiers adds multiple modifiers to the roll at once.
@@ -91,37 +88,38 @@ func (rb *DiceManager) WithModifier(name string, value int) *DiceManager {
 //
 //	mods := map[string]int{"strength": 3, "proficiency": 2}
 //	roller.Dice(1, 20).WithModifiers(mods).Roll()
-func (rb *DiceManager) WithModifiers(modifiers map[string]int) *DiceManager {
+func (dm *DiceManager) WithModifiers(modifiers map[string]int) *DiceManager {
 	for name, value := range modifiers {
-		rb.Modifiers = append(rb.Modifiers, NewModifier(name, value))
+		dm.Modifiers = append(dm.Modifiers, NewModifier(name, value))
 	}
-	return rb
+	return dm
 }
 
 // WithAdvantage sets the roll to use advantage (roll twice, take higher).
-// 5e mechanic.
+// 5e mechanic. Ignored by RollPercentile.
 //
 // Example:
 //
 //	roller.Dice(1, 20).WithAdvantage().Roll()
-func (rb *DiceManager) WithAdvantage() *DiceManager {
-	rb.AdvantageType = Advantage
-	return rb
+func (dm *DiceManager) WithAdvantage() *DiceManager {
+	dm.AdvantageType = Advantage
+	return dm
 }
 
 // WithDisadvantage sets the roll to use disadvantage (roll twice, take lower).
-// 5e mechanic.
+// 5e mechanic. Ignored by RollPercentile.
 //
 // Example:
 //
 //	roller.Dice(1, 20).WithDisadvantage().Roll()
-func (rb *DiceManager) WithDisadvantage() *DiceManager {
-	rb.AdvantageType = Disadvantage
-	return rb
+func (dm *DiceManager) WithDisadvantage() *DiceManager {
+	dm.AdvantageType = Disadvantage
+	return dm
 }
 
 // RollPercentile rolls a Call of Cthulhu-style d100 (tens digit + ones digit, 00 = 100).
 // This is distinct from Roll() / Roll("1d100"), which use standard 1–N die faces.
+// AdvantageType is ignored; this always rolls tens + ones.
 //
 // Requires 2d10. If both RollCount and DieFaces are unset (0), 2d10 is assumed.
 // Any other configuration returns an error.
@@ -134,23 +132,23 @@ func (rb *DiceManager) WithDisadvantage() *DiceManager {
 //
 //	result, err := roller.Dice(2, 10).RollPercentile()
 //	result, err := roller.Dice(0, 0).RollPercentile() // assumes 2d10
-func (rb *DiceManager) RollPercentile() (RollOutcome, error) {
-	if err := rb.Error(); err != nil {
-		return rb.doneWithErr(err)
+func (dm *DiceManager) RollPercentile() (RollOutcome, error) {
+	if err := dm.Error(); err != nil {
+		return dm.fail(err)
 	}
-	if rb.RollCount == 0 && rb.DieFaces == 0 {
-		rb.RollCount = 2
-		rb.DieFaces = 10
+	if dm.RollCount == 0 && dm.DieFaces == 0 {
+		dm.RollCount = 2
+		dm.DieFaces = 10
 	}
-	if rb.RollCount != 2 || rb.DieFaces != 10 {
-		return rb.doneWithErr(errPercentileRequires2d10)
+	if dm.RollCount != 2 || dm.DieFaces != 10 {
+		return dm.fail(errPercentileRequires2d10)
 	}
 
-	rb.roller.mu.Lock()
-	defer rb.roller.mu.Unlock()
+	dm.roller.mu.Lock()
+	defer dm.roller.mu.Unlock()
 
-	tensDigit := rb.roller.rng.Intn(10)
-	onesDigit := rb.roller.rng.Intn(10)
+	tensDigit := dm.roller.rng.IntN(10)
+	onesDigit := dm.roller.rng.IntN(10)
 
 	result := tensDigit*10 + onesDigit
 	if result == 0 {
@@ -158,7 +156,7 @@ func (rb *DiceManager) RollPercentile() (RollOutcome, error) {
 	}
 
 	modifierTotal := 0
-	for _, mod := range rb.Modifiers {
+	for _, mod := range dm.Modifiers {
 		modifierTotal += mod.Value
 	}
 
@@ -166,7 +164,7 @@ func (rb *DiceManager) RollPercentile() (RollOutcome, error) {
 		{Faces: 10, Result: tensDigit},
 		{Faces: 10, Result: onesDigit},
 	}
-	return rb.done(NewRollOutcome(rolls, rb.Modifiers, result+modifierTotal))
+	return dm.succeed(NewRollOutcome(rolls, dm.Modifiers, result+modifierTotal))
 }
 
 // Roll executes the configured dice roll and returns the result.
@@ -175,49 +173,49 @@ func (rb *DiceManager) RollPercentile() (RollOutcome, error) {
 // Example:
 //
 //	result, err  := roller.Dice(2, 6).WithModifier("strength", 3).Roll()
-func (rb *DiceManager) Roll() (RollOutcome, error) {
-	if err := rb.Error(); err != nil {
-		return rb.doneWithErr(err)
+func (dm *DiceManager) Roll() (RollOutcome, error) {
+	if err := dm.Error(); err != nil {
+		return dm.fail(err)
 	}
-	if rb.RollCount == 0 {
-		return rb.doneWithErr(errRollCountZero)
+	if dm.RollCount == 0 {
+		return dm.fail(errRollCountZero)
 	}
-	if rb.DieFaces == 0 {
-		return rb.doneWithErr(errDieFacesZero)
+	if dm.DieFaces == 0 {
+		return dm.fail(errDieFacesZero)
 	}
 
-	rb.roller.mu.Lock()
-	defer rb.roller.mu.Unlock()
+	dm.roller.mu.Lock()
+	defer dm.roller.mu.Unlock()
 
 	var rolls []DieRoll
 	var diceTotal int
-	faces := rb.DieFaces
+	faces := dm.DieFaces
 
-	switch rb.AdvantageType {
+	switch dm.AdvantageType {
 	case Normal:
-		rolls = make([]DieRoll, rb.RollCount)
-		for i := range rb.RollCount {
-			n := rb.roller.rng.Intn(int(faces)) + 1
+		rolls = make([]DieRoll, dm.RollCount)
+		for i := range dm.RollCount {
+			n := dm.roller.rng.IntN(int(faces)) + 1
 			rolls[i] = DieRoll{Faces: faces, Result: n}
 			diceTotal += n
 		}
 
 	case Advantage:
 		// Roll twice per die, keep all rolls but use higher values for total
-		rolls = make([]DieRoll, rb.RollCount*2)
-		for i := range rb.RollCount {
-			roll1 := rb.roller.rng.Intn(int(faces)) + 1
-			roll2 := rb.roller.rng.Intn(int(faces)) + 1
+		rolls = make([]DieRoll, dm.RollCount*2)
+		for i := range dm.RollCount {
+			roll1 := dm.roller.rng.IntN(int(faces)) + 1
+			roll2 := dm.roller.rng.IntN(int(faces)) + 1
 			rolls[i*2] = DieRoll{Faces: faces, Result: roll1}
 			rolls[i*2+1] = DieRoll{Faces: faces, Result: roll2}
 			diceTotal += max(roll1, roll2)
 		}
 
 	case Disadvantage:
-		rolls = make([]DieRoll, rb.RollCount*2)
-		for i := range rb.RollCount {
-			roll1 := rb.roller.rng.Intn(int(faces)) + 1
-			roll2 := rb.roller.rng.Intn(int(faces)) + 1
+		rolls = make([]DieRoll, dm.RollCount*2)
+		for i := range dm.RollCount {
+			roll1 := dm.roller.rng.IntN(int(faces)) + 1
+			roll2 := dm.roller.rng.IntN(int(faces)) + 1
 			rolls[i*2] = DieRoll{Faces: faces, Result: roll1}
 			rolls[i*2+1] = DieRoll{Faces: faces, Result: roll2}
 			diceTotal += min(roll1, roll2)
@@ -225,9 +223,9 @@ func (rb *DiceManager) Roll() (RollOutcome, error) {
 	}
 
 	modifierTotal := 0
-	for _, mod := range rb.Modifiers {
+	for _, mod := range dm.Modifiers {
 		modifierTotal += mod.Value
 	}
 
-	return rb.done(NewRollOutcome(rolls, rb.Modifiers, diceTotal+modifierTotal))
+	return dm.succeed(NewRollOutcome(rolls, dm.Modifiers, diceTotal+modifierTotal))
 }

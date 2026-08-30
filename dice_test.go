@@ -12,7 +12,6 @@ func TestRollOutcome_Detail(t *testing.T) {
 		rolls       []DieRoll
 		modifiers   []Modifier
 		value       int
-		hasError    bool // unused; outcomes have no error path
 		modCount    int
 		detailRE    string
 		detailExact string
@@ -62,7 +61,7 @@ func TestRollOutcome_Detail(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			o := NewRollOutcome(tt.rolls, tt.modifiers, tt.value)
-			if len(o.Modifiers) != tt.modCount && tt.modCount > 0 {
+			if tt.modCount > 0 && len(o.Modifiers) != tt.modCount {
 				t.Errorf("Modifiers len = %d, want %d", len(o.Modifiers), tt.modCount)
 			}
 			if tt.modCount > 0 && len(tt.modifiers) > 0 {
@@ -235,35 +234,35 @@ func TestDiceManager_Roll(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rb := setupDice(tt.seed, tt.count, tt.faces, tt.expr)
-			if rb.RollCount != tt.count {
-				t.Errorf("RollCount = %d, want %d", rb.RollCount, tt.count)
+			dm := setupDice(tt.seed, tt.count, tt.faces, tt.expr)
+			if dm.RollCount != tt.count {
+				t.Errorf("RollCount = %d, want %d", dm.RollCount, tt.count)
 			}
-			if rb.DieFaces != tt.faces {
-				t.Errorf("DieFaces = %d, want %d", rb.DieFaces, tt.faces)
+			if dm.DieFaces != tt.faces {
+				t.Errorf("DieFaces = %d, want %d", dm.DieFaces, tt.faces)
 			}
 			if len(tt.mods) > 0 {
-				rb = rb.WithModifiers(tt.mods)
+				dm = dm.WithModifiers(tt.mods)
 			}
 			if tt.hasNotationMod {
 				found := false
-				for _, m := range rb.Modifiers {
+				for _, m := range dm.Modifiers {
 					if m.Reason == "modifier" && m.Value == tt.notationMod {
 						found = true
 						break
 					}
 				}
 				if !found {
-					t.Errorf("Modifiers = %v, want notation modifier %d", rb.Modifiers, tt.notationMod)
+					t.Errorf("Modifiers = %v, want notation modifier %d", dm.Modifiers, tt.notationMod)
 				}
 			}
 			switch tt.adv {
 			case Advantage:
-				rb = rb.WithAdvantage()
+				dm = dm.WithAdvantage()
 			case Disadvantage:
-				rb = rb.WithDisadvantage()
+				dm = dm.WithDisadvantage()
 			}
-			out, err := rb.Roll()
+			out, err := dm.Roll()
 			if tt.hasError {
 				if err == nil {
 					t.Fatal("expected error")
@@ -271,31 +270,21 @@ func TestDiceManager_Roll(t *testing.T) {
 				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
 					t.Errorf("err = %v, want %v", err, tt.errIs)
 				}
-				if rb.Error() == nil {
+				if dm.Error() == nil {
 					t.Fatal("Error() = nil, want error")
 				}
-				if tt.errIs != nil && !errors.Is(rb.Error(), tt.errIs) {
-					t.Errorf("Error() = %v, want %v", rb.Error(), tt.errIs)
-				}
-				if len(rb.Results) != 0 {
-					t.Errorf("Results len = %d, want 0", len(rb.Results))
+				if tt.errIs != nil && !errors.Is(dm.Error(), tt.errIs) {
+					t.Errorf("Error() = %v, want %v", dm.Error(), tt.errIs)
 				}
 				return
 			}
-			if err != nil || rb.Error() != nil {
-				t.Fatalf("unexpected error: %v (Error=%v)", err, rb.Error())
+			if err != nil || dm.Error() != nil {
+				t.Fatalf("unexpected error: %v (Error=%v)", err, dm.Error())
 			}
-			if len(rb.Results) != 1 {
-				t.Fatalf("Results len = %d, want 1", len(rb.Results))
-			}
-			if out.Value != rb.Results[0].Value {
-				t.Errorf("returned Value %d != Results[0].Value %d", out.Value, rb.Results[0].Value)
-			}
-			out = rb.Results[0]
 			if out.Value < tt.valueMin || out.Value > tt.valueMax {
 				t.Errorf("Value %d not in [%d, %d]", out.Value, tt.valueMin, tt.valueMax)
 			}
-			if tt.diceCount >= 0 && len(out.DiceRolls) != tt.diceCount {
+			if len(out.DiceRolls) != tt.diceCount {
 				t.Errorf("DiceRolls len = %d, want %d", len(out.DiceRolls), tt.diceCount)
 			}
 			for _, d := range out.DiceRolls {
@@ -367,7 +356,7 @@ func TestDiceManager_RollPercentile(t *testing.T) {
 		},
 		{
 			name:      "00 maps to 100",
-			seed:      60,
+			seed:      169,
 			count:     2,
 			faces:     10,
 			valueMin:  100,
@@ -426,17 +415,17 @@ func TestDiceManager_RollPercentile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rb := setupDice(tt.seed, tt.count, tt.faces, tt.expr)
-			if rb.RollCount != tt.count {
-				t.Errorf("RollCount = %d, want %d", rb.RollCount, tt.count)
+			dm := setupDice(tt.seed, tt.count, tt.faces, tt.expr)
+			if dm.RollCount != tt.count {
+				t.Errorf("RollCount = %d, want %d", dm.RollCount, tt.count)
 			}
-			if rb.DieFaces != tt.faces {
-				t.Errorf("DieFaces = %d, want %d", rb.DieFaces, tt.faces)
+			if dm.DieFaces != tt.faces {
+				t.Errorf("DieFaces = %d, want %d", dm.DieFaces, tt.faces)
 			}
 			if len(tt.mods) > 0 {
-				rb = rb.WithModifiers(tt.mods)
+				dm = dm.WithModifiers(tt.mods)
 			}
-			out, err := rb.RollPercentile()
+			out, err := dm.RollPercentile()
 			if tt.hasError {
 				if err == nil {
 					t.Fatal("expected error")
@@ -444,31 +433,24 @@ func TestDiceManager_RollPercentile(t *testing.T) {
 				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
 					t.Errorf("err = %v, want %v", err, tt.errIs)
 				}
-				if rb.Error() == nil {
+				if dm.Error() == nil {
 					t.Fatal("Error() = nil, want error")
 				}
-				if tt.errIs != nil && !errors.Is(rb.Error(), tt.errIs) {
-					t.Errorf("Error() = %v, want %v", rb.Error(), tt.errIs)
-				}
-				if len(rb.Results) != 0 {
-					t.Errorf("Results len = %d, want 0", len(rb.Results))
+				if tt.errIs != nil && !errors.Is(dm.Error(), tt.errIs) {
+					t.Errorf("Error() = %v, want %v", dm.Error(), tt.errIs)
 				}
 				return
 			}
-			if err != nil || rb.Error() != nil {
-				t.Fatalf("unexpected error: %v (Error=%v)", err, rb.Error())
+			if err != nil || dm.Error() != nil {
+				t.Fatalf("unexpected error: %v (Error=%v)", err, dm.Error())
 			}
-			if len(rb.Results) != 1 {
-				t.Fatalf("Results len = %d, want 1", len(rb.Results))
-			}
-			out = rb.Results[0]
-			if rb.RollCount != 2 || rb.DieFaces != 10 {
-				t.Errorf("after percentile RollCount, DieFaces = %d, %d, want 2, 10", rb.RollCount, rb.DieFaces)
+			if dm.RollCount != 2 || dm.DieFaces != 10 {
+				t.Errorf("after percentile RollCount, DieFaces = %d, %d, want 2, 10", dm.RollCount, dm.DieFaces)
 			}
 			if out.Value < tt.valueMin || out.Value > tt.valueMax {
 				t.Errorf("Value %d not in [%d, %d]", out.Value, tt.valueMin, tt.valueMax)
 			}
-			if tt.diceCount >= 0 && len(out.DiceRolls) != tt.diceCount {
+			if len(out.DiceRolls) != tt.diceCount {
 				t.Errorf("DiceRolls len = %d, want %d", len(out.DiceRolls), tt.diceCount)
 			}
 			for i, d := range out.DiceRolls {
@@ -500,73 +482,6 @@ func TestDiceManager_RollPercentile(t *testing.T) {
 			}
 			if tt.detailRE != "" && !regexp.MustCompile(tt.detailRE).MatchString(out.Detail()) {
 				t.Errorf("Detail() = %q, want match %q", out.Detail(), tt.detailRE)
-			}
-		})
-	}
-}
-
-func TestDiceManager_Results(t *testing.T) {
-	tests := []struct {
-		name      string
-		thenCount uint
-		thenFaces uint
-		thenError bool
-		errIs     error
-	}{
-		{
-			name:      "second success replaces Results",
-			thenCount: 1,
-			thenFaces: 20,
-		},
-		{
-			name:      "success then failure clears Results",
-			thenCount: 0,
-			thenFaces: 20,
-			thenError: true,
-			errIs:     errRollCountZero,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rb := NewRoller(42).Dice(1, 20)
-			first, err := rb.Roll()
-			if err != nil || rb.Error() != nil {
-				t.Fatalf("first Roll: %v (Error=%v)", err, rb.Error())
-			}
-			if len(rb.Results) != 1 {
-				t.Fatalf("after first Roll Results len = %d, want 1", len(rb.Results))
-			}
-			if rb.Results[0].Value != first.Value {
-				t.Errorf("Results[0].Value = %d, want %d", rb.Results[0].Value, first.Value)
-			}
-
-			rb.RollCount = tt.thenCount
-			rb.DieFaces = tt.thenFaces
-			second, err := rb.Roll()
-			if tt.thenError {
-				if err == nil {
-					t.Fatal("expected error on second Roll")
-				}
-				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
-					t.Errorf("err = %v, want %v", err, tt.errIs)
-				}
-				if rb.Error() == nil {
-					t.Fatal("Error() = nil, want error")
-				}
-				if len(rb.Results) != 0 {
-					t.Errorf("Results len = %d, want 0", len(rb.Results))
-				}
-				return
-			}
-			if err != nil || rb.Error() != nil {
-				t.Fatalf("second Roll: %v (Error=%v)", err, rb.Error())
-			}
-			if len(rb.Results) != 1 {
-				t.Fatalf("after second Roll Results len = %d, want 1", len(rb.Results))
-			}
-			if rb.Results[0].Value != second.Value {
-				t.Errorf("Results[0].Value = %d, want latest %d", rb.Results[0].Value, second.Value)
 			}
 		})
 	}
