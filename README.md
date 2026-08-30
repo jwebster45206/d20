@@ -61,7 +61,7 @@ func main() {
 
 ## Core Types
 
-### Roller & RollBuilder
+### Roller & DiceManager
 
 The `Roller` provides dice rolling functionality through both a fluent builder API and simple dice notation:
 
@@ -74,17 +74,17 @@ func NewRandomRoller() *Roller
 func (r *Roller) Roll(notation string) (RollOutcome, error)
 
 // Start building a roll - for complex scenarios
-func (r *Roller) Dice(rollCount, dieFaces uint) *RollBuilder
+func (r *Roller) Dice(rollCount, dieFaces uint) *DiceManager
 
-// RollBuilder - fluent API for configuring rolls
-type RollBuilder struct { /* private fields */ }
+// DiceManager - fluent API for configuring rolls
+type DiceManager struct { /* private fields */ }
 
-func (rb *RollBuilder) WithModifier(name string, value int) *RollBuilder
-func (rb *RollBuilder) WithModifiers(modifiers map[string]int) *RollBuilder
-func (rb *RollBuilder) WithAdvantage() *RollBuilder
-func (rb *RollBuilder) WithDisadvantage() *RollBuilder
-func (rb *RollBuilder) Roll() (RollOutcome, error)
-func (rb *RollBuilder) RollPercentile() (RollOutcome, error)
+func (rb *DiceManager) WithModifier(name string, value int) *DiceManager
+func (rb *DiceManager) WithModifiers(modifiers map[string]int) *DiceManager
+func (rb *DiceManager) WithAdvantage() *DiceManager
+func (rb *DiceManager) WithDisadvantage() *DiceManager
+func (rb *DiceManager) Roll() (RollOutcome, error)
+func (rb *DiceManager) RollPercentile() (RollOutcome, error)
 ```
 
 **Dice Notation Shorthand:**
@@ -185,9 +185,9 @@ func (a *Actor) AddCombatModifier(name string, value int)
 func (a *Actor) RemoveCombatModifier(name string)
 
 // Roll Methods
-func (a *Actor) SkillCheck(skill string, roller *Roller) (*RollBuilder, error)
-func (a *Actor) AttackRoll(roller *Roller) *RollBuilder
-func (a *Actor) D100SkillCheck(skill string, roller *Roller) (*RollBuilder, error)
+func (a *Actor) SkillCheck(skill string, roller *Roller) (*DiceManager, error)
+func (a *Actor) AttackRoll(roller *Roller) *DiceManager
+func (a *Actor) D100SkillCheck(skill string, roller *Roller) (*DiceManager, error)
 ```
 
 ### Creating Actors
@@ -266,10 +266,10 @@ The flexible attribute system supports standard D&D 5e ability scores and derive
 
 ### Actor Roll Methods
 
-Actor roll methods return `*RollBuilder` for flexible configuration:
+Actor roll methods return `*DiceManager` for flexible configuration:
 
 ```go
-// SkillCheck - Returns a RollBuilder configured with the skill modifier
+// SkillCheck - Returns a DiceManager configured with the skill modifier
 builder, err := actor.SkillCheck("stealth", roller)
 if err != nil {
     // skill not found in attributes
@@ -278,7 +278,7 @@ result, _ := builder.Roll()                    // Normal roll
 result, _ := builder.WithAdvantage().Roll()    // With advantage
 result, _ := builder.WithDisadvantage().Roll() // With disadvantage
 
-// AttackRoll - Returns a RollBuilder with all combat modifiers applied
+// AttackRoll - Returns a DiceManager with all combat modifiers applied
 builder := actor.AttackRoll(roller)
 result, _ := builder.Roll()                             // Normal attack
 result, _ := builder.WithAdvantage().Roll()             // Attack with advantage
@@ -293,7 +293,7 @@ success := outcome.Value <= skill
 
 #### Advantage/Disadvantage Mechanics
 
-Advantage and disadvantage are configured on the `RollBuilder`:
+Advantage and disadvantage are configured on the `DiceManager`:
 
 - **Advantage**: Rolls 2 dice, uses higher, shows both in `DiceRolls` (e.g. two `{Faces:20, Result:…}`)
 - **Disadvantage**: Rolls 2 dice, uses lower, shows both in `DiceRolls`
@@ -310,7 +310,7 @@ The library supports d100/percentile rolls in two ways:
 
 ### Skill Checks
 
-Skill checks use the actor's attribute values and return configurable `RollBuilder`:
+Skill checks use the actor's attribute values and return configurable `DiceManager`:
 
 ```go
 // D&D 5e skill checks (d20 + modifiers)

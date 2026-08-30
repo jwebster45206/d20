@@ -227,9 +227,9 @@ func (a *Actor) GetCombatModifiers() []Modifier {
 	return modifiers
 }
 
-// SkillCheck creates a RollBuilder for a skill check using D&D 5e conventions (1d20 + skill modifier).
+// SkillCheck creates a DiceManager for a skill check using D&D 5e conventions (1d20 + skill modifier).
 // The skill value is looked up from the actor's Attributes map.
-// Returns a RollBuilder pre-configured with the skill modifier. Chain .WithAdvantage() or other
+// Returns a DiceManager pre-configured with the skill modifier. Chain .WithAdvantage() or other
 // modifiers as needed, then call .Roll() to execute.
 //
 // Returns an error if the skill is not found.
@@ -248,13 +248,13 @@ func (a *Actor) SkillCheck(skill string, roller *Roller) (*DiceManager, error) {
 		return nil, fmt.Errorf("skill %q not found in actor attributes", skill)
 	}
 
-	// Return a RollBuilder with skill modifier pre-loaded
+	// Return a DiceManager with skill modifier pre-loaded
 	return roller.Dice(1, 20).WithModifier(skill, skillValue), nil
 }
 
-// AttackRoll creates a RollBuilder for an attack roll using the actor's CombatModifiers.
+// AttackRoll creates a DiceManager for an attack roll using the actor's CombatModifiers.
 // Uses D&D 5e conventions (1d20 + combat modifiers).
-// Returns a RollBuilder pre-configured with all combat modifiers. Chain .WithAdvantage(),
+// Returns a DiceManager pre-configured with all combat modifiers. Chain .WithAdvantage(),
 // .WithModifier() for situational bonuses, then call .Roll() to execute.
 //
 // Example:
@@ -276,7 +276,7 @@ func (a *Actor) AttackRoll(roller *Roller) *DiceManager {
 	return builder
 }
 
-// D100SkillCheck returns a 2d10 RollBuilder for a roll-under skill check.
+// D100SkillCheck returns a 2d10 DiceManager for a roll-under skill check.
 // Errors if the skill is missing. Compare outcome.Value to Attribute(skill) for success.
 //
 //	builder, _ := actor.D100SkillCheck("stealth", roller)
