@@ -185,17 +185,15 @@ func Example_newActor() {
 	// AC: 18
 }
 
-// Example_actorFields shows setting attributes and combat modifiers.
+// Example_actorFields shows setting attributes and modifiers.
 func Example_actorFields() {
 	actor := d20.NewActor("Fighter")
 	actor.MaxHP, actor.HP = 50, 50
 	actor.AC = 18
 	actor.Attributes["strength"] = 16
 	actor.Attributes["dexterity"] = 14
-	actor.CombatModifiers = []d20.Modifier{
-		d20.NewModifier("strength", 3),
-		d20.NewModifier("proficiency", 2),
-	}
+	actor.Modifiers["strength"] = 3
+	actor.Modifiers["striking"] = 2
 
 	fmt.Printf("HP: %d\n", actor.MaxHP)
 	fmt.Printf("Strength: %d\n", actor.Attributes["strength"])
@@ -236,40 +234,36 @@ func Example_actorSkillCheckAdvantage() {
 	// Check: 24
 }
 
-// Example_actorAttackRoll shows making an attack roll.
-func Example_actorAttackRoll() {
+// Example_actorStrikeRoll shows making a strike roll.
+func Example_actorStrikeRoll() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Fighter")
 	actor.MaxHP, actor.HP = 45, 45
 	actor.AC = 18
-	actor.CombatModifiers = []d20.Modifier{
-		d20.NewModifier("strength", 4),
-		d20.NewModifier("proficiency", 3),
-	}
+	actor.Modifiers["strength"] = 4
+	actor.Modifiers["striking"] = 3
 
-	result, _ := actor.AttackRoll(roller).Roll()
+	result, _ := actor.StrikeRoll(roller, "strength", "striking").Roll()
 
-	fmt.Printf("Attack: %d\n", result.Value)
+	fmt.Printf("Strike: %d\n", result.Value)
 	// Output:
-	// Attack: 13
+	// Strike: 13
 }
 
-// Example_actorAttackAdvantage shows an attack with advantage.
-func Example_actorAttackAdvantage() {
+// Example_actorStrikeAdvantage shows a strike with advantage.
+func Example_actorStrikeAdvantage() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Barbarian")
 	actor.MaxHP, actor.HP = 52, 52
 	actor.AC = 15
-	actor.CombatModifiers = []d20.Modifier{
-		d20.NewModifier("strength", 5),
-		d20.NewModifier("proficiency", 3),
-	}
+	actor.Modifiers["strength"] = 5
+	actor.Modifiers["striking"] = 3
 
-	result, _ := actor.AttackRoll(roller).WithAdvantage().Roll()
+	result, _ := actor.StrikeRoll(roller, "strength", "striking").WithAdvantage().Roll()
 
-	fmt.Printf("Attack: %d\n", result.Value)
+	fmt.Printf("Strike: %d\n", result.Value)
 	// Output:
-	// Attack: 16
+	// Strike: 16
 }
 
 // Example_hpManagement shows managing actor hit points.
@@ -326,26 +320,23 @@ func Example_attributes() {
 	// Wisdom debuffed: 12
 }
 
-// Example_combatModifiers shows managing combat modifiers.
-func Example_combatModifiers() {
+// Example_strikeModifiers shows wiring modifiers and applying a subset on a strike.
+func Example_strikeModifiers() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Paladin")
 	actor.MaxHP, actor.HP = 42, 42
 	actor.AC = 18
-	actor.CombatModifiers = []d20.Modifier{
-		d20.NewModifier("strength", 4),
-		d20.NewModifier("proficiency", 3),
-	}
+	actor.Modifiers["strength"] = 4
+	actor.Modifiers["striking"] = 3
+	actor.Modifiers["damage"] = 2
 
-	result, _ := actor.AttackRoll(roller).Roll()
+	result, _ := actor.StrikeRoll(roller, "strength", "striking").Roll()
 	fmt.Printf("Normal: %d\n", result.Value)
 
-	actor.CombatModifiers = append(actor.CombatModifiers, d20.NewModifier("bless", 1))
-	result, _ = actor.AttackRoll(roller).Roll()
+	result, _ = actor.StrikeRoll(roller, "strength", "striking").WithModifier("bless", 1).Roll()
 	fmt.Printf("With bless: %d\n", result.Value)
 
-	actor.CombatModifiers = actor.CombatModifiers[:2]
-	result, _ = actor.AttackRoll(roller).Roll()
+	result, _ = actor.StrikeRoll(roller, "strength", "striking").Roll()
 	fmt.Printf("After bless: %d\n", result.Value)
 
 	// Output:
@@ -397,21 +388,19 @@ func Example_withAttributesMap() {
 	// STR: 16, DEX: 14
 }
 
-// Example_combatModifiersSlice shows setting combat modifiers as a slice.
-func Example_combatModifiersSlice() {
+// Example_strikeRollKeys shows selecting which modifiers apply to a strike.
+func Example_strikeRollKeys() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Fighter")
 	actor.MaxHP, actor.HP = 50, 50
 	actor.AC = 18
-	actor.CombatModifiers = []d20.Modifier{
-		d20.NewModifier("strength", 4),
-		d20.NewModifier("proficiency", 3),
-	}
+	actor.Modifiers["strength"] = 4
+	actor.Modifiers["striking"] = 3
 
-	result, _ := actor.AttackRoll(roller).Roll()
-	fmt.Printf("Attack: %d\n", result.Value)
+	result, _ := actor.StrikeRoll(roller, "strength", "striking").Roll()
+	fmt.Printf("Strike: %d\n", result.Value)
 	// Output:
-	// Attack: 13
+	// Strike: 13
 }
 
 // Example_rolledStats shows creating an actor with rolled stats.
@@ -488,10 +477,10 @@ func Example_rolledCombatStats() {
 	barbarian.Attributes["strength"] = 18
 
 	rage, _ := roller.Dice(1, 4).Roll()
-	barbarian.CombatModifiers = append(barbarian.CombatModifiers, d20.NewModifier("rage", rage.Value))
+	barbarian.Modifiers["rage"] = rage.Value
 
-	result, _ := barbarian.AttackRoll(roller).Roll()
-	fmt.Printf("Raging attack includes +%d rage: %d total\n", rage.Value, result.Value)
+	result, _ := barbarian.StrikeRoll(roller, "rage").Roll()
+	fmt.Printf("Raging strike includes +%d rage: %d total\n", rage.Value, result.Value)
 	// Output:
-	// Raging attack includes +2 rage: 10 total
+	// Raging strike includes +2 rage: 10 total
 }

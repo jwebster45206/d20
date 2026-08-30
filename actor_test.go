@@ -25,8 +25,8 @@ func TestActor_NewActor(t *testing.T) {
 			if actor.Attributes == nil {
 				t.Error("Attributes map is nil")
 			}
-			if actor.CombatModifiers == nil {
-				t.Error("CombatModifiers is nil")
+			if actor.Modifiers == nil {
+				t.Error("Modifiers map is nil")
 			}
 		})
 	}
@@ -89,20 +89,21 @@ func TestActor_HPHelpers(t *testing.T) {
 
 func TestActor_Rolls(t *testing.T) {
 	tests := []struct {
-		name      string
-		attrs     map[string]int
-		combat    []Modifier
-		kind      string // skill, attack, d100, d100_mod
-		skill     string
-		modName   string
-		modValue  int
-		advantage bool
-		hasError  bool
-		valueMin  int
-		valueMax  int
-		diceCount int
-		detailRE  string
-		wantMods  int
+		name       string
+		attrs      map[string]int
+		mods       map[string]int
+		strikeKeys []string
+		kind       string // skill, strike, d100, d100_mod
+		skill      string
+		modName    string
+		modValue   int
+		advantage  bool
+		hasError   bool
+		valueMin   int
+		valueMax   int
+		diceCount  int
+		detailRE   string
+		wantMods   int
 	}{
 		{
 			name:      "skill check",
@@ -143,31 +144,43 @@ func TestActor_Rolls(t *testing.T) {
 			wantMods:  1,
 		},
 		{
-			name:      "attack with combat mods",
-			combat:    []Modifier{NewModifier("strength", 3), NewModifier("proficiency", 2)},
-			kind:      "attack",
-			valueMin:  6,
-			valueMax:  25,
-			diceCount: 1,
-			wantMods:  2,
+			name:       "strike with named mods",
+			mods:       map[string]int{"strength": 3, "striking": 2},
+			strikeKeys: []string{"strength", "striking"},
+			kind:       "strike",
+			valueMin:   6,
+			valueMax:   25,
+			diceCount:  1,
+			wantMods:   2,
 		},
 		{
-			name:      "attack no mods",
-			kind:      "attack",
+			name:      "strike no keys",
+			kind:      "strike",
 			valueMin:  1,
 			valueMax:  20,
 			diceCount: 1,
 			wantMods:  0,
 		},
 		{
-			name:      "attack advantage",
-			combat:    []Modifier{NewModifier("strength", 5)},
-			kind:      "attack",
-			advantage: true,
-			valueMin:  6,
-			valueMax:  25,
-			diceCount: 2,
-			wantMods:  1,
+			name:       "strike skips missing and unselected keys",
+			mods:       map[string]int{"strength": 5, "damage": 10},
+			strikeKeys: []string{"strength", "striking"},
+			kind:       "strike",
+			valueMin:   6,
+			valueMax:   25,
+			diceCount:  1,
+			wantMods:   1,
+		},
+		{
+			name:       "strike advantage",
+			mods:       map[string]int{"strength": 5},
+			strikeKeys: []string{"strength"},
+			kind:       "strike",
+			advantage:  true,
+			valueMin:   6,
+			valueMax:   25,
+			diceCount:  2,
+			wantMods:   1,
 		},
 		{
 			name:      "d100 skill check",
@@ -210,8 +223,8 @@ func TestActor_Rolls(t *testing.T) {
 			if tt.attrs != nil {
 				actor.Attributes = tt.attrs
 			}
-			if tt.combat != nil {
-				actor.CombatModifiers = tt.combat
+			if tt.mods != nil {
+				actor.Modifiers = tt.mods
 			}
 
 			var out RollOutcome
@@ -236,8 +249,8 @@ func TestActor_Rolls(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Roll: %v", err)
 				}
-			case "attack":
-				builder := actor.AttackRoll(roller)
+			case "strike":
+				builder := actor.StrikeRoll(roller, tt.strikeKeys...)
 				if tt.advantage {
 					builder = builder.WithAdvantage()
 				}

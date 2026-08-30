@@ -35,21 +35,21 @@ func normalizeID(id string) string {
 //	fighter.AC = 18
 //	fmt.Println(fighter.ID) // "ironpants_son_of_arathorn"
 type Actor struct {
-	ID              string         // Unique identifier (normalized by NewActor)
-	MaxHP           int            // Maximum Hit Points
-	HP              int            // Current Hit Points
-	AC              int            // Armor Class
-	Initiative      int            // Initiative order (situational)
-	CombatModifiers []Modifier     // Offensive modifiers for attack rolls
-	Attributes      map[string]int // Flexible attributes (abilities, skills, etc.)
+	ID         string         // Unique identifier (normalized by NewActor)
+	MaxHP      int            // Maximum Hit Points
+	HP         int            // Current Hit Points
+	AC         int            // Armor Class
+	Initiative int            // Initiative order (situational)
+	Attributes map[string]int // Scores and skills — not roll bonuses
+	Modifiers  map[string]int // Caller-wired bonuses; not derived from Attributes
 }
 
 // NewActor creates an Actor with a normalized ID and initialized maps.
 func NewActor(id string) *Actor {
 	return &Actor{
-		ID:              normalizeID(id),
-		CombatModifiers: []Modifier{},
-		Attributes:      make(map[string]int),
+		ID:         normalizeID(id),
+		Attributes: make(map[string]int),
+		Modifiers:  make(map[string]int),
 	}
 }
 
@@ -100,23 +100,23 @@ func (a *Actor) SkillCheck(skill string, roller *Roller) (*DiceManager, error) {
 	return roller.Dice(1, 20).WithModifier(skill, skillValue), nil
 }
 
-// AttackRoll creates a DiceManager for an attack roll using CombatModifiers.
-// Uses D&D 5e conventions (1d20 + combat modifiers).
+// StrikeRoll creates a DiceManager for a strike (attack) roll.
+// Uses D&D 5e conventions (1d20). Only the named modifier keys are applied;
+// missing keys are skipped. Situational bonuses go on the returned DiceManager.
 //
 // Example:
 //
-//	actor.CombatModifiers = []Modifier{
-//		NewModifier("strength", 5),
-//		NewModifier("proficiency", 3),
-//	}
-//	result, _ := actor.AttackRoll(roller).WithAdvantage().Roll()
-func (a *Actor) AttackRoll(roller *Roller) *DiceManager {
+//	actor.Modifiers["strength"] = 5
+//	actor.Modifiers["striking"] = 3
+//	result, _ := actor.StrikeRoll(roller, "strength", "striking").WithAdvantage().Roll()
+func (a *Actor) StrikeRoll(roller *Roller, keys ...string) *DiceManager {
 	builder := roller.Dice(1, 20)
-
-	for _, mod := range a.CombatModifiers {
-		builder = builder.WithModifier(mod.Reason, mod.Value)
+	for _, name := range keys {
+		name = strings.ToLower(name)
+		if v, ok := a.Modifiers[name]; ok {
+			builder = builder.WithModifier(name, v)
+		}
 	}
-
 	return builder
 }
 

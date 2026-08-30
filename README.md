@@ -149,13 +149,13 @@ Actors represent characters, NPCs, and monsters. Attribute keys are caller-owned
 
 ```go
 type Actor struct {
-    ID              string
-    MaxHP           int
-    HP              int
-    AC              int
-    Initiative      int
-    CombatModifiers []Modifier
-    Attributes      map[string]int
+    ID         string
+    MaxHP      int
+    HP         int
+    AC         int
+    Initiative int
+    Attributes map[string]int // scores, skills
+    Modifiers  map[string]int // caller-wired bonuses
 }
 
 func NewActor(id string) *Actor
@@ -166,9 +166,11 @@ func (a *Actor) ResetHP()                 // Restore to MaxHP
 func (a *Actor) IsKnockedOut() bool       // Returns true if HP == 0
 
 func (a *Actor) SkillCheck(skill string, roller *Roller) (*DiceManager, error)
-func (a *Actor) AttackRoll(roller *Roller) *DiceManager
+func (a *Actor) StrikeRoll(roller *Roller, keys ...string) *DiceManager
 func (a *Actor) D100SkillCheck(skill string, roller *Roller) (*DiceManager, error)
 ```
+
+Well-known names live in `github.com/jwebster45206/d20/vocab` (`vocab.Strength`, `vocab.Striking`, `vocab.Damage`). Custom string keys are allowed. 
 
 ### Creating Actors
 
@@ -184,9 +186,9 @@ wizard.Attributes = map[string]int{
     "intelligence": 18,
     "wisdom":       16,
 }
-wizard.CombatModifiers = []d20.Modifier{
-    d20.NewModifier("intelligence", 4),
-    d20.NewModifier("proficiency", 4),
+wizard.Modifiers = map[string]int{
+    "intelligence": 4,
+    "striking":     4,
 }
 
 // Rolled stats: roll, then assign
@@ -200,17 +202,22 @@ barbarian.Attributes["strength"] = str.Value
 barbarian.Attributes["proficiency"] = 4
 ```
 
-### Combat Modifiers
+### Modifiers
 
-Combat modifiers apply to an actor's attack rolls. Mutate the slice directly:
+`Modifiers` are bonuses the caller wires. They are not derived from `Attributes`. `StrikeRoll` applies only the keys you pass; missing keys are skipped. Situational extras go on the `DiceManager`.
 
 ```go
-actor.CombatModifiers = append(actor.CombatModifiers, d20.NewModifier("strength", 4))
-actor.CombatModifiers = append(actor.CombatModifiers, d20.NewModifier("proficiency", 3))
-actor.CombatModifiers = append(actor.CombatModifiers, d20.NewModifier("magic_weapon", 1))
+import "github.com/jwebster45206/d20/vocab"
+
+actor.Modifiers[vocab.Strength] = 4
+actor.Modifiers[vocab.Striking] = 3
+actor.Modifiers[vocab.Damage] = 1
+
+result, _ := actor.StrikeRoll(roller, vocab.Strength, vocab.Striking).Roll()
+result, _ = actor.StrikeRoll(roller, vocab.Strength, vocab.Striking).WithModifier("bless", 1).Roll()
 ```
 
-Common combat modifiers include ability modifiers, proficiency, magic weapons, spell effects (bless), and class features.
+`vocab.Damage` is for damage rolls you build yourself (`Dice(1, 8).WithModifier(vocab.Damage, actor.Modifiers[vocab.Damage])`). `StrikeRoll` never auto-includes it.
 
 ### Attributes
 
@@ -238,7 +245,7 @@ if err != nil {
 result, _ := builder.Roll()
 result, _ = builder.WithAdvantage().Roll()
 
-builder = actor.AttackRoll(roller)
+builder = actor.StrikeRoll(roller, vocab.Strength, vocab.Striking)
 result, _ = builder.Roll()
 result, _ = builder.WithAdvantage().Roll()
 result, _ = builder.WithModifier("bless", 1).Roll()
@@ -323,6 +330,11 @@ fmt.Printf("Percentile: %d (digits: %v)\n", result.Value, result.DiceRolls)
 ### Actor Usage
 
 ```go
+import (
+    "github.com/jwebster45206/d20"
+    "github.com/jwebster45206/d20/vocab"
+)
+
 roller := d20.NewRoller(time.Now().UnixNano())
 
 fighter := d20.NewActor("Ironpants")
@@ -335,18 +347,17 @@ fighter.Attributes = map[string]int{
     "athletics":    5,
     "stealth":      2,
 }
-fighter.CombatModifiers = []d20.Modifier{
-    d20.NewModifier("strength", 3),
-    d20.NewModifier("proficiency", 3),
-    d20.NewModifier("magic_weapon", 1),
+fighter.Modifiers = map[string]int{
+    vocab.Strength: 3,
+    vocab.Striking: 3,
 }
 
 wizard := d20.NewActor("Merlin")
 wizard.MaxHP, wizard.HP = 22, 22
 wizard.AC = 12
-wizard.Attributes["intelligence"] = 18
-wizard.Attributes["wisdom"] = 14
-wizard.CombatModifiers = append(wizard.CombatModifiers, d20.NewModifier("intelligence", 4))
+wizard.Attributes[vocab.Intelligence] = 18
+wizard.Attributes[vocab.Wisdom] = 14
+wizard.Modifiers[vocab.Intelligence] = 4
 
 hp, _ := roller.Roll("12d12+48")
 barbarian := d20.NewActor("Grog")
@@ -358,13 +369,13 @@ for _, key := range []string{"strength", "dexterity", "constitution", "intellige
     barbarian.Attributes[key] = out.Value
 }
 
-result, _ := fighter.AttackRoll(roller).Roll()
-fmt.Printf("Attack: %d\n", result.Value)
+result, _ := fighter.StrikeRoll(roller, vocab.Strength, vocab.Striking).Roll()
+fmt.Printf("Strike: %d\n", result.Value)
 
-result, _ = fighter.AttackRoll(roller).WithAdvantage().Roll()
-fmt.Printf("Attack with advantage: %d (dice: %v)\n", result.Value, result.DiceRolls)
+result, _ = fighter.StrikeRoll(roller, vocab.Strength, vocab.Striking).WithAdvantage().Roll()
+fmt.Printf("Strike with advantage: %d (dice: %v)\n", result.Value, result.DiceRolls)
 
-result, _ = fighter.AttackRoll(roller).
+result, _ = fighter.StrikeRoll(roller, vocab.Strength, vocab.Striking).
     WithModifier("bless", 1).
     WithModifier("cover_penalty", -2).
     Roll()
