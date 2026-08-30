@@ -46,11 +46,12 @@ func NewActor(id string) *ActorBuilder {
 //
 // Example:
 //
-//	roller := d20.NewRoller()
-//	actor := d20.NewActor("fighter", 0, 0).
+//	roller := d20.NewRandomRoller()
+//	actor, err := d20.NewActor("fighter").
 //	    WithRoller(roller).
 //	    WithRolledHP("10d10+30").
 //	    WithRolledAttribute("strength", "3d6").
+//	    WithAC(16).
 //	    Build()
 func (ab *ActorBuilder) WithRoller(roller *Roller) *ActorBuilder {
 	ab.roller = roller
@@ -134,8 +135,14 @@ func (ab *ActorBuilder) WithCombatModifiers(mods map[string]int) *ActorBuilder {
 }
 
 func (ab *ActorBuilder) Build() (*Actor, error) {
+	if ab.id == "" {
+		ab.errors = append(ab.errors, fmt.Errorf("id must not be empty after normalization"))
+	}
 	if ab.maxHP <= 0 {
 		ab.errors = append(ab.errors, fmt.Errorf("hp must be greater than 0, got %d", ab.maxHP))
+	}
+	if ab.ac <= 0 {
+		ab.errors = append(ab.errors, fmt.Errorf("ac must be greater than 0, got %d", ab.ac))
 	}
 
 	if len(ab.errors) > 0 {

@@ -93,7 +93,7 @@ func Example_rollWithAdvantage() {
 
 	fmt.Printf("Roll: %d, Dice: %v\n", result.Value, result.DiceRolls)
 	// Output:
-	// Roll: 8, Dice: [6 8]
+	// Roll: 8, Dice: [{20 6} {20 8}]
 }
 
 // Example_disadvantage shows rolling with disadvantage (2 dice, take lower).
@@ -103,7 +103,7 @@ func Example_disadvantage() {
 
 	fmt.Printf("Rolled: %d (from %v)\n", result.Value, result.DiceRolls)
 	// Output:
-	// Rolled: 6 (from [6 8])
+	// Rolled: 6 (from [{20 6} {20 8}])
 }
 
 // Example_advantageWithModifier shows combining advantage with modifiers.
@@ -126,7 +126,7 @@ func Example_multipleDice() {
 
 	fmt.Printf("Total: %d (rolls: %v)\n", result.Value, result.DiceRolls)
 	// Output:
-	// Total: 15 (rolls: [6 6 3])
+	// Total: 15 (rolls: [{6 6} {6 6} {6 3}])
 }
 
 // Example_damageDice shows a typical damage roll.
@@ -363,19 +363,6 @@ func Example_idNormalization() {
 	// goblin_3
 }
 
-// Example_normal shows switching back to normal after advantage.
-func Example_normal() {
-	roller := d20.NewRoller(42)
-
-	builder := roller.Dice(1, 20).WithAdvantage()
-	builder = builder.Normal()
-	result, _ := builder.Roll()
-
-	fmt.Printf("Roll: %d (dice: %v)\n", result.Value, result.DiceRolls)
-	// Output:
-	// Roll: 6 (dice: [6])
-}
-
 // Example_negativeModifiers shows using negative modifiers as penalties.
 func Example_negativeModifiers() {
 	roller := d20.NewRoller(42)
@@ -450,7 +437,7 @@ func Example_withRoller() {
 func Example_rolledCharacterCreation() {
 	roller := d20.NewRoller(42)
 
-	// Roll all 6 ability scores using 4d6 keep highest 3
+	// Roll all 6 ability scores using 3d6
 	attrs := map[string]string{
 		"strength":     "3d6",
 		"dexterity":    "3d6",

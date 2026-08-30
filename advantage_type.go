@@ -1,12 +1,11 @@
 package d20
 
 // AdvantageType represents the advantage/disadvantage state for a roll.
-// This is a core 5e mechanic where advantage means roll twice and take higher,
-// disadvantage means roll twice and take lower.
+// 5e: advantage rolls twice and takes higher, disadvantage rolls twice and takes lower.
 type AdvantageType int
 
 const (
-	Disadvantage AdvantageType = iota // Roll twice, take lower
-	Normal                            // Roll normally
+	Normal       AdvantageType = iota // Roll normally (zero value)
 	Advantage                         // Roll twice, take higher
+	Disadvantage                      // Roll twice, take lower
 )

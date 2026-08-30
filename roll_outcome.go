@@ -5,55 +5,82 @@ import (
 	"strings"
 )
 
-// RollOutcome is the complete result of a dice roll operation.
-type RollOutcome struct {
-	Value     int    // Final calculated result (dice total + modifiers)
-	DiceRolls []int  // Raw values from each die rolled
-	Detail    string // Formatted roll description in Bioware style
+// DieRoll is one physical die result: its face count and the number showing.
+type DieRoll struct {
+	Faces  uint // Die size (e.g. 20 for a d20, 10 for a percentile digit)
+	Result int  // Face showing (1–Faces for standard rolls; 0–9 for percentile digits)
 }
 
-// NewRollOutcome creates a new RollOutcome with formatted detail string.
-// The detail string follows Bioware-style formatting:
-// "Rolled 2d20... 16, 12; +3 strength, +2 proficiency; *Result: 33*"
-func NewRollOutcome(rollCount uint, dieFaces uint, rolls []int, modifiers []Modifier, finalValue int) RollOutcome {
+// RollOutcome is the complete result of a dice roll operation.
+// It contains the final result, raw values, and modifiers used in the calculation.
+type RollOutcome struct {
+	Value     int        // Final calculated result (dice total + modifiers)
+	DiceRolls []DieRoll  // Each die rolled, with faces and result
+	Modifiers []Modifier // Modifiers applied to the roll
+}
+
+// NewRollOutcome creates a new RollOutcome from die results and modifiers.
+func NewRollOutcome(rolls []DieRoll, modifiers []Modifier, finalValue int) RollOutcome {
+	rollsCopy := make([]DieRoll, len(rolls))
+	copy(rollsCopy, rolls)
+	modsCopy := make([]Modifier, len(modifiers))
+	copy(modsCopy, modifiers)
 	return RollOutcome{
 		Value:     finalValue,
-		DiceRolls: rolls,
-		Detail:    formatRollDetail(rollCount, dieFaces, rolls, modifiers, finalValue),
+		DiceRolls: rollsCopy,
+		Modifiers: modsCopy,
 	}
 }
 
-// formatRollDetail creates a display-formatted string for a roll result.
-func formatRollDetail(rollCount uint, dieFaces uint, rolls []int, modifiers []Modifier, finalValue int) string {
-	// Start with dice notation (e.g., "Rolled 2d20...")
-	result := fmt.Sprintf("Rolled %dd%d...", rollCount, dieFaces)
+// Detail returns a Bioware-style formatted description of the roll, for example:
+// "Rolled 2d20... 16, 12; +3 strength, +2 proficiency; *Result: 33*"
+func (o RollOutcome) Detail() string {
+	result := "Rolled " + diceNotation(o.DiceRolls) + "..."
 
-	// Individual die values
-	if len(rolls) > 0 {
-		rollStrs := make([]string, len(rolls))
-		for i, r := range rolls {
-			rollStrs[i] = fmt.Sprintf("%d", r)
+	if len(o.DiceRolls) > 0 {
+		rollStrs := make([]string, len(o.DiceRolls))
+		for i, r := range o.DiceRolls {
+			rollStrs[i] = fmt.Sprintf("%d", r.Result)
 		}
 		result += " " + strings.Join(rollStrs, ", ")
 	}
 
-	// Modifiers
-	if len(modifiers) > 0 {
-		modStrs := make([]string, len(modifiers))
-		for i, mod := range modifiers {
-			var sign string
+	if len(o.Modifiers) > 0 {
+		modStrs := make([]string, len(o.Modifiers))
+		for i, mod := range o.Modifiers {
+			sign := "+"
 			val := mod.Value
 			if val < 0 {
 				sign = "" // val is already negative, will display as -X
-			} else {
-				sign = "+"
 			}
 			modStrs[i] = fmt.Sprintf("%s%d %s", sign, val, strings.ToLower(mod.Reason))
 		}
 		result += "; " + strings.Join(modStrs, ", ")
 	}
 
-	// Final result
-	result += "; *Result: " + fmt.Sprintf("%d*", finalValue)
+	result += "; *Result: " + fmt.Sprintf("%d*", o.Value)
 	return result
+}
+
+// diceNotation derives NdF (or mixed 1dA + 1dB) from the dice actually rolled.
+func diceNotation(rolls []DieRoll) string {
+	if len(rolls) == 0 {
+		return "0d0"
+	}
+	faces := rolls[0].Faces
+	same := true
+	for _, r := range rolls[1:] {
+		if r.Faces != faces {
+			same = false
+			break
+		}
+	}
+	if same {
+		return fmt.Sprintf("%dd%d", len(rolls), faces)
+	}
+	parts := make([]string, len(rolls))
+	for i, r := range rolls {
+		parts[i] = fmt.Sprintf("1d%d", r.Faces)
+	}
+	return strings.Join(parts, " + ")
 }

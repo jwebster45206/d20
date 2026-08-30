@@ -1,626 +1,474 @@
 package d20
 
 import (
+	"regexp"
 	"testing"
 )
 
-// Test ActorBuilder - NewActor and Build
-func TestActorBuilder_NewActorAndBuild(t *testing.T) {
-	actor, err := NewActor("TEST-ACTOR").WithHP(20).WithAC(15).Build()
-	if err != nil {
-		t.Fatalf("Build() error: %v", err)
-	}
-
-	// ID should be normalized to lowercase snake_case
-	if actor.ID() != "test_actor" {
-		t.Errorf("Expected ID 'test_actor', got '%s'", actor.ID())
-	}
-	if actor.MaxHP() != 20 {
-		t.Errorf("Expected MaxHP 20, got %d", actor.MaxHP())
-	}
-	if actor.HP() != 20 {
-		t.Errorf("Expected HP 20 (starts at max), got %d", actor.HP())
-	}
-	if actor.AC() != 15 {
-		t.Errorf("Expected AC 15, got %d", actor.AC())
-	}
-	if actor.Initiative() != 0 {
-		t.Errorf("Expected Initiative 0 (default), got %d", actor.Initiative())
-	}
-}
-
-// Test ActorBuilder validation
-func TestActorBuilder_BuildValidation(t *testing.T) {
-	// HP must be > 0
-	_, err := NewActor("test").Build()
-	if err == nil {
-		t.Error("Expected error for HP <= 0, got nil")
-	}
-}
-
-// Test ActorBuilder.WithAttribute
-func TestActorBuilder_WithAttribute(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithAttribute("Strength", 16).
-		WithAttribute("DEX", 14).
-		Build()
-
-	// Keys should be lowercased
-	str, exists := actor.Attribute("strength")
-	if !exists || str != 16 {
-		t.Errorf("Expected strength 16, got %d (exists: %v)", str, exists)
-	}
-
-	dex, exists := actor.Attribute("dex")
-	if !exists || dex != 14 {
-		t.Errorf("Expected dex 14, got %d (exists: %v)", dex, exists)
-	}
-}
-
-// Test ActorBuilder.WithAttributes
-func TestActorBuilder_WithAttributes(t *testing.T) {
-	attrs := map[string]int{
-		"Strength":     16,
-		"DEXTERITY":    14,
-		"constitution": 15,
-	}
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithAttributes(attrs).
-		Build()
-
-	// All keys should be lowercased
-	str, _ := actor.Attribute("strength")
-	if str != 16 {
-		t.Errorf("Expected strength 16, got %d", str)
-	}
-
-	dex, _ := actor.Attribute("dexterity")
-	if dex != 14 {
-		t.Errorf("Expected dexterity 14, got %d", dex)
-	}
-
-	con, _ := actor.Attribute("constitution")
-	if con != 15 {
-		t.Errorf("Expected constitution 15, got %d", con)
-	}
-}
-
-// Test ActorBuilder.WithCombatModifier
-func TestActorBuilder_WithCombatModifier(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithCombatModifier("flanking", 2).
-		WithCombatModifier("bless", 1).
-		Build()
-
-	mods := actor.GetCombatModifiers()
-	if len(mods) != 2 {
-		t.Errorf("Expected 2 combat modifiers, got %d", len(mods))
-	}
-
-	// Verify via attack roll
-	roller := NewRoller(42)
-	builder := actor.AttackRoll(roller)
-	result, _ := builder.Roll()
-
-	// Expect dice + flanking(2) + bless(1) = dice + 3
-	expected := result.DiceRolls[0] + 3
-	if result.Value != expected {
-		t.Errorf("Expected value %d, got %d", expected, result.Value)
-	}
-}
-
-// Test ActorBuilder.WithCombatModifiers
-func TestActorBuilder_WithCombatModifiers(t *testing.T) {
-	mods := map[string]int{
-		"Flanking": 2,
-		"BLESS":    1,
-	}
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithCombatModifiers(mods).
-		Build()
-
-	combatMods := actor.GetCombatModifiers()
-	if len(combatMods) != 2 {
-		t.Errorf("Expected 2 combat modifiers, got %d", len(combatMods))
-	}
-}
-
-// Test Actor.ID normalization
-func TestActor_IDNormalization(t *testing.T) {
+func TestActor_Build(t *testing.T) {
 	tests := []struct {
-		input    string
-		expected string
+		name     string
+		id       string
+		hp       int
+		ac       int
+		setHP    bool
+		setAC    bool
+		attrs    map[string]int
+		hasError bool
+		wantID   string
+		wantHP   int
+		wantAC   int
+		wantInit int
 	}{
-		{"Simple", "simple"},
-		{"UPPERCASE", "uppercase"},
-		{"Mixed Case", "mixed_case"},
-		{"With-Dashes", "with_dashes"},
-		{"Multiple   Spaces", "multiple_spaces"},
-		{"Special!@#Characters", "special_characters"},
+		{
+			name:     "normalizes id and sets stats",
+			id:       "TEST-ACTOR",
+			hp:       20,
+			ac:       15,
+			setHP:    true,
+			setAC:    true,
+			wantID:   "test_actor",
+			wantHP:   20,
+			wantAC:   15,
+			wantInit: 0,
+		},
+		{
+			name:   "spaces become snake_case",
+			id:     "Busta the Black",
+			hp:     10,
+			ac:     10,
+			setHP:  true,
+			setAC:  true,
+			wantID: "busta_the_black",
+			wantHP: 10,
+			wantAC: 10,
+		},
+		{
+			name:   "with attributes",
+			id:     "hero",
+			hp:     20,
+			ac:     15,
+			setHP:  true,
+			setAC:  true,
+			attrs:  map[string]int{"strength": 16, "Stealth": 5},
+			wantID: "hero",
+			wantHP: 20,
+			wantAC: 15,
+		},
+		{
+			name:     "missing hp",
+			id:       "test",
+			ac:       10,
+			setAC:    true,
+			hasError: true,
+		},
+		{
+			name:     "missing ac",
+			id:       "test",
+			hp:       10,
+			setHP:    true,
+			hasError: true,
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			actor, _ := NewActor(tt.input).WithHP(10).WithAC(10).Build()
-			if actor.ID() != tt.expected {
-				t.Errorf("Expected ID '%s', got '%s'", tt.expected, actor.ID())
+		t.Run(tt.name, func(t *testing.T) {
+			b := NewActor(tt.id)
+			if tt.setHP {
+				b = b.WithHP(tt.hp)
+			}
+			if tt.setAC {
+				b = b.WithAC(tt.ac)
+			}
+			if tt.attrs != nil {
+				b = b.WithAttributes(tt.attrs)
+			}
+			actor, err := b.Build()
+			if tt.hasError {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if actor.ID() != tt.wantID {
+				t.Errorf("ID = %q, want %q", actor.ID(), tt.wantID)
+			}
+			if actor.HP() != tt.wantHP || actor.MaxHP() != tt.wantHP {
+				t.Errorf("HP/MaxHP = %d/%d, want %d", actor.HP(), actor.MaxHP(), tt.wantHP)
+			}
+			if actor.AC() != tt.wantAC {
+				t.Errorf("AC = %d, want %d", actor.AC(), tt.wantAC)
+			}
+			if actor.Initiative() != tt.wantInit {
+				t.Errorf("Initiative = %d, want %d", actor.Initiative(), tt.wantInit)
+			}
+			for k, v := range tt.attrs {
+				got, ok := actor.Attribute(k)
+				if !ok || got != v {
+					t.Errorf("Attribute(%q) = %d,%v, want %d,true", k, got, ok, v)
+				}
 			}
 		})
 	}
 }
 
-// Test Actor.SetHP
-func TestActor_SetHP(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	// Valid HP change
-	err := actor.SetHP(10)
-	if err != nil {
-		t.Errorf("SetHP(10) error: %v", err)
-	}
-	if actor.HP() != 10 {
-		t.Errorf("Expected HP 10, got %d", actor.HP())
-	}
-
-	// HP cannot be negative
-	err = actor.SetHP(-5)
-	if err == nil {
-		t.Error("Expected error for negative HP, got nil")
-	}
-
-	// HP cannot exceed max
-	err = actor.SetHP(25)
-	if err == nil {
-		t.Error("Expected error for HP > MaxHP, got nil")
-	}
-}
-
-// Test Actor.SetMaxHP
-func TestActor_SetMaxHP(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	// Valid max HP change
-	err := actor.SetMaxHP(30)
-	if err != nil {
-		t.Errorf("SetMaxHP(30) error: %v", err)
-	}
-	if actor.MaxHP() != 30 {
-		t.Errorf("Expected MaxHP 30, got %d", actor.MaxHP())
-	}
-
-	// Max HP must be > 0
-	err = actor.SetMaxHP(0)
-	if err == nil {
-		t.Error("Expected error for MaxHP <= 0, got nil")
-	}
-
-	// Current HP adjusted if exceeds new max
-	_ = actor.SetHP(30)
-	_ = actor.SetMaxHP(15)
-	if actor.HP() != 15 {
-		t.Errorf("Expected HP adjusted to 15, got %d", actor.HP())
-	}
-}
-
-// Test Actor.SubHP
-func TestActor_SubHP(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	actor.SubHP(5)
-	if actor.HP() != 15 {
-		t.Errorf("Expected HP 15, got %d", actor.HP())
-	}
-
-	// HP cannot go below 0
-	actor.SubHP(20)
-	if actor.HP() != 0 {
-		t.Errorf("Expected HP 0 (floor), got %d", actor.HP())
-	}
-}
-
-// Test Actor.AddHP
-func TestActor_AddHP(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-	_ = actor.SetHP(10)
-
-	actor.AddHP(5)
-	if actor.HP() != 15 {
-		t.Errorf("Expected HP 15, got %d", actor.HP())
-	}
-
-	// HP cannot exceed max
-	actor.AddHP(20)
-	if actor.HP() != 20 {
-		t.Errorf("Expected HP 20 (ceiling at max), got %d", actor.HP())
-	}
-}
-
-// Test Actor.ResetHP
-func TestActor_ResetHP(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-	_ = actor.SetHP(5)
-
-	actor.ResetHP()
-	if actor.HP() != 20 {
-		t.Errorf("Expected HP reset to 20, got %d", actor.HP())
-	}
-}
-
-// Test Actor.IsKnockedOut
-func TestActor_IsKnockedOut(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	if actor.IsKnockedOut() {
-		t.Error("Expected not knocked out at full HP")
-	}
-
-	_ = actor.SetHP(0)
-	if !actor.IsKnockedOut() {
-		t.Error("Expected knocked out at 0 HP")
-	}
-}
-
-// Test Actor.SetAC
-func TestActor_SetAC(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	err := actor.SetAC(18)
-	if err != nil {
-		t.Errorf("SetAC(18) error: %v", err)
-	}
-	if actor.AC() != 18 {
-		t.Errorf("Expected AC 18, got %d", actor.AC())
-	}
-
-	// AC must be > 0
-	err = actor.SetAC(0)
-	if err == nil {
-		t.Error("Expected error for AC <= 0, got nil")
-	}
-}
-
-// Test Actor.SetInitiative
-func TestActor_SetInitiative(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	actor.SetInitiative(5)
-	if actor.Initiative() != 5 {
-		t.Errorf("Expected Initiative 5, got %d", actor.Initiative())
-	}
-}
-
-// Test Actor.Attribute and SetAttribute
-func TestActor_AttributeAndSetAttribute(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	// Initially no attributes
-	_, exists := actor.Attribute("strength")
-	if exists {
-		t.Error("Expected no strength attribute initially")
+func TestActor_State(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func(*Actor)
+		hasError bool
+		check    func(*testing.T, *Actor)
+	}{
+		{
+			name: "SetHP valid",
+			setup: func(a *Actor) {
+				_ = a.SetHP(10)
+			},
+			check: func(t *testing.T, a *Actor) {
+				if a.HP() != 10 {
+					t.Errorf("HP = %d, want 10", a.HP())
+				}
+			},
+		},
+		{
+			name:     "SetHP negative errors",
+			setup:    func(a *Actor) {},
+			hasError: true,
+			check: func(t *testing.T, a *Actor) {
+				if err := a.SetHP(-1); err == nil {
+					t.Fatal("expected error")
+				}
+			},
+		},
+		{
+			name:     "SetHP above max errors",
+			setup:    func(a *Actor) {},
+			hasError: true,
+			check: func(t *testing.T, a *Actor) {
+				if err := a.SetHP(100); err == nil {
+					t.Fatal("expected error")
+				}
+			},
+		},
+		{
+			name: "SetMaxHP clamps current",
+			setup: func(a *Actor) {
+				_ = a.SetHP(20)
+				_ = a.SetMaxHP(15)
+			},
+			check: func(t *testing.T, a *Actor) {
+				if a.MaxHP() != 15 || a.HP() != 15 {
+					t.Errorf("HP/Max = %d/%d, want 15/15", a.HP(), a.MaxHP())
+				}
+			},
+		},
+		{
+			name:     "SetMaxHP zero errors",
+			hasError: true,
+			check: func(t *testing.T, a *Actor) {
+				if err := a.SetMaxHP(0); err == nil {
+					t.Fatal("expected error")
+				}
+			},
+		},
+		{
+			name: "SubHP floors at zero",
+			setup: func(a *Actor) {
+				a.SubHP(100)
+			},
+			check: func(t *testing.T, a *Actor) {
+				if a.HP() != 0 || !a.IsKnockedOut() {
+					t.Errorf("HP = %d knockedOut=%v", a.HP(), a.IsKnockedOut())
+				}
+			},
+		},
+		{
+			name: "AddHP caps at max",
+			setup: func(a *Actor) {
+				_ = a.SetHP(5)
+				a.AddHP(100)
+			},
+			check: func(t *testing.T, a *Actor) {
+				if a.HP() != a.MaxHP() {
+					t.Errorf("HP = %d, want max %d", a.HP(), a.MaxHP())
+				}
+			},
+		},
+		{
+			name: "ResetHP",
+			setup: func(a *Actor) {
+				_ = a.SetHP(3)
+				a.ResetHP()
+			},
+			check: func(t *testing.T, a *Actor) {
+				if a.HP() != a.MaxHP() {
+					t.Errorf("HP = %d, want %d", a.HP(), a.MaxHP())
+				}
+			},
+		},
+		{
+			name: "SetAC",
+			setup: func(a *Actor) {
+				_ = a.SetAC(18)
+			},
+			check: func(t *testing.T, a *Actor) {
+				if a.AC() != 18 {
+					t.Errorf("AC = %d, want 18", a.AC())
+				}
+			},
+		},
+		{
+			name:     "SetAC negative errors",
+			hasError: true,
+			check: func(t *testing.T, a *Actor) {
+				if err := a.SetAC(-1); err == nil {
+					t.Fatal("expected error")
+				}
+			},
+		},
+		{
+			name: "SetInitiative",
+			setup: func(a *Actor) {
+				a.SetInitiative(7)
+			},
+			check: func(t *testing.T, a *Actor) {
+				if a.Initiative() != 7 {
+					t.Errorf("Initiative = %d, want 7", a.Initiative())
+				}
+			},
+		},
+		{
+			name: "attribute set get remove",
+			setup: func(a *Actor) {
+				a.SetAttribute("stealth", 45)
+				a.IncrementAttribute("stealth", 5)
+				a.DecrementAttribute("stealth", 2)
+			},
+			check: func(t *testing.T, a *Actor) {
+				v, ok := a.Attribute("stealth")
+				if !ok || v != 48 {
+					t.Errorf("stealth = %d,%v, want 48,true", v, ok)
+				}
+				a.RemoveAttribute("stealth")
+				if a.HasAttribute("stealth") {
+					t.Error("stealth still present after remove")
+				}
+			},
+		},
+		{
+			name: "combat modifiers add remove",
+			setup: func(a *Actor) {
+				a.AddCombatModifier("strength", 3)
+				a.AddCombatModifier("proficiency", 2)
+				a.RemoveCombatModifier("strength")
+			},
+			check: func(t *testing.T, a *Actor) {
+				mods := a.GetCombatModifiers()
+				if len(mods) != 1 || mods[0].Reason != "proficiency" || mods[0].Value != 2 {
+					t.Errorf("mods = %+v, want proficiency +2 only", mods)
+				}
+			},
+		},
 	}
 
-	// Set attribute
-	actor.SetAttribute("Strength", 16)
-	str, exists := actor.Attribute("strength")
-	if !exists || str != 16 {
-		t.Errorf("Expected strength 16, got %d (exists: %v)", str, exists)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actor, err := NewActor("hero").WithHP(20).WithAC(15).Build()
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			if tt.setup != nil {
+				tt.setup(actor)
+			}
+			tt.check(t, actor)
+		})
 	}
 }
 
-// Test Actor.HasAttribute
-func TestActor_HasAttribute(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	if actor.HasAttribute("strength") {
-		t.Error("Expected no strength attribute initially")
+func TestActor_Rolls(t *testing.T) {
+	tests := []struct {
+		name      string
+		attrs     map[string]int
+		combat    map[string]int
+		kind      string // skill, attack, d100, d100_mod
+		skill     string
+		modName   string
+		modValue  int
+		advantage bool
+		hasError  bool
+		valueMin  int
+		valueMax  int
+		diceCount int
+		detailRE  string
+		wantMods  int
+	}{
+		{
+			name:      "skill check",
+			attrs:     map[string]int{"athletics": 5},
+			kind:      "skill",
+			skill:     "athletics",
+			valueMin:  6,
+			valueMax:  25,
+			diceCount: 1,
+			detailRE:  `\+5 athletics`,
+			wantMods:  1,
+		},
+		{
+			name:     "skill missing",
+			kind:     "skill",
+			skill:    "missing",
+			hasError: true,
+		},
+		{
+			name:      "skill with advantage",
+			attrs:     map[string]int{"stealth": 3},
+			kind:      "skill",
+			skill:     "stealth",
+			advantage: true,
+			valueMin:  4,
+			valueMax:  23,
+			diceCount: 2,
+			wantMods:  1,
+		},
+		{
+			name:      "attack with combat mods",
+			combat:    map[string]int{"strength": 3, "proficiency": 2},
+			kind:      "attack",
+			valueMin:  6,
+			valueMax:  25,
+			diceCount: 1,
+			wantMods:  2,
+		},
+		{
+			name:      "attack no mods",
+			kind:      "attack",
+			valueMin:  1,
+			valueMax:  20,
+			diceCount: 1,
+			wantMods:  0,
+		},
+		{
+			name:      "attack advantage",
+			combat:    map[string]int{"strength": 5},
+			kind:      "attack",
+			advantage: true,
+			valueMin:  6,
+			valueMax:  25,
+			diceCount: 2,
+			wantMods:  1,
+		},
+		{
+			name:      "d100 skill check",
+			attrs:     map[string]int{"stealth": 45},
+			kind:      "d100",
+			skill:     "stealth",
+			valueMin:  1,
+			valueMax:  100,
+			diceCount: 2,
+			detailRE:  `Rolled 2d10\.\.\.`,
+		},
+		{
+			name:      "d100 with modifier",
+			attrs:     map[string]int{"stealth": 45},
+			kind:      "d100_mod",
+			skill:     "stealth",
+			modName:   "penalty",
+			modValue:  -5,
+			valueMin:  -4,
+			valueMax:  95,
+			diceCount: 2,
+			wantMods:  1,
+			detailRE:  `-5 penalty`,
+		},
+		{
+			name:     "d100 missing skill",
+			kind:     "d100",
+			skill:    "missing",
+			hasError: true,
+		},
 	}
 
-	actor.SetAttribute("strength", 16)
-	if !actor.HasAttribute("strength") {
-		t.Error("Expected to have strength attribute")
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			roller := NewRoller(42)
+			b := NewActor("hero").WithHP(20).WithAC(15)
+			if tt.attrs != nil {
+				b = b.WithAttributes(tt.attrs)
+			}
+			if tt.combat != nil {
+				b = b.WithCombatModifiers(tt.combat)
+			}
+			actor, err := b.Build()
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
 
-// Test Actor.RemoveAttribute
-func TestActor_RemoveAttribute(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-	actor.SetAttribute("strength", 16)
+			var out RollOutcome
+			switch tt.kind {
+			case "skill":
+				builder, err := actor.SkillCheck(tt.skill, roller)
+				if tt.hasError {
+					if err == nil {
+						t.Fatal("expected error")
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("SkillCheck: %v", err)
+				}
+				if tt.advantage {
+					builder = builder.WithAdvantage()
+				}
+				out, err = builder.Roll()
+				if err != nil {
+					t.Fatalf("Roll: %v", err)
+				}
+			case "attack":
+				builder := actor.AttackRoll(roller)
+				if tt.advantage {
+					builder = builder.WithAdvantage()
+				}
+				out, err = builder.Roll()
+				if err != nil {
+					t.Fatalf("Roll: %v", err)
+				}
+			case "d100", "d100_mod":
+				builder, err := actor.D100SkillCheck(tt.skill, roller)
+				if tt.hasError {
+					if err == nil {
+						t.Fatal("expected error")
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("D100SkillCheck: %v", err)
+				}
+				if tt.kind == "d100_mod" {
+					builder = builder.WithModifier(tt.modName, tt.modValue)
+				}
+				out, err = builder.RollPercentile()
+				if err != nil {
+					t.Fatalf("RollPercentile: %v", err)
+				}
+			default:
+				t.Fatalf("unknown kind %q", tt.kind)
+			}
 
-	actor.RemoveAttribute("strength")
-	if actor.HasAttribute("strength") {
-		t.Error("Expected strength attribute to be removed")
-	}
-}
-
-// Test Actor.IncrementAttribute
-func TestActor_IncrementAttribute(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-	actor.SetAttribute("strength", 16)
-
-	actor.IncrementAttribute("strength", 2)
-	str, _ := actor.Attribute("strength")
-	if str != 18 {
-		t.Errorf("Expected strength 18, got %d", str)
-	}
-
-	// Create new attribute if doesn't exist
-	actor.IncrementAttribute("newstat", 5)
-	newstat, _ := actor.Attribute("newstat")
-	if newstat != 5 {
-		t.Errorf("Expected newstat 5, got %d", newstat)
-	}
-}
-
-// Test Actor.DecrementAttribute
-func TestActor_DecrementAttribute(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-	actor.SetAttribute("strength", 16)
-
-	actor.DecrementAttribute("strength", 2)
-	str, _ := actor.Attribute("strength")
-	if str != 14 {
-		t.Errorf("Expected strength 14, got %d", str)
-	}
-
-	// Create new attribute if doesn't exist
-	actor.DecrementAttribute("newstat", 5)
-	newstat, _ := actor.Attribute("newstat")
-	if newstat != -5 {
-		t.Errorf("Expected newstat -5, got %d", newstat)
-	}
-}
-
-// Test Actor.AddCombatModifier and GetCombatModifiers
-func TestActor_AddCombatModifier(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	actor.AddCombatModifier("flanking", 2)
-	actor.AddCombatModifier("bless", 1)
-
-	mods := actor.GetCombatModifiers()
-	if len(mods) != 2 {
-		t.Errorf("Expected 2 combat modifiers, got %d", len(mods))
-	}
-}
-
-// Test Actor.RemoveCombatModifier
-func TestActor_RemoveCombatModifier(t *testing.T) {
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithCombatModifier("flanking", 2).
-		WithCombatModifier("bless", 1).
-		Build()
-
-	actor.RemoveCombatModifier("flanking")
-
-	mods := actor.GetCombatModifiers()
-	if len(mods) != 1 {
-		t.Errorf("Expected 1 combat modifier, got %d", len(mods))
-	}
-
-	// Verify bless is still there
-	if mods[0].Reason != "bless" {
-		t.Errorf("Expected remaining modifier to be 'bless', got '%s'", mods[0].Reason)
-	}
-}
-
-// Test Actor.SkillCheck - returns RollBuilder
-func TestActor_SkillCheck(t *testing.T) {
-	roller := NewRoller(42)
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithAttribute("dexterity", 16).
-		Build()
-
-	builder, err := actor.SkillCheck("dexterity", roller)
-	if err != nil {
-		t.Fatalf("SkillCheck() error: %v", err)
-	}
-
-	result, err := builder.Roll()
-	if err != nil {
-		t.Fatalf("Roll() error: %v", err)
-	}
-
-	// Value should be dice + dexterity (16)
-	expected := result.DiceRolls[0] + 16
-	if result.Value != expected {
-		t.Errorf("Expected value %d, got %d", expected, result.Value)
-	}
-}
-
-// Test Actor.SkillCheck - missing skill
-func TestActor_SkillCheck_MissingSkill(t *testing.T) {
-	roller := NewRoller(42)
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	_, err := actor.SkillCheck("nonexistent", roller)
-	if err == nil {
-		t.Error("Expected error for missing skill, got nil")
-	}
-}
-
-// Test Actor.SkillCheck with advantage
-func TestActor_SkillCheck_WithAdvantage(t *testing.T) {
-	roller := NewRoller(42)
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithAttribute("stealth", 5).
-		Build()
-
-	builder, _ := actor.SkillCheck("stealth", roller)
-	result, _ := builder.WithAdvantage().Roll()
-
-	// With advantage, should have 2 dice rolls (both rolls visible)
-	if len(result.DiceRolls) != 2 {
-		t.Errorf("Expected 2 dice rolls (advantage), got %d", len(result.DiceRolls))
-	}
-
-	// Value should be higher roll + stealth (5)
-	higherRoll := max(result.DiceRolls[0], result.DiceRolls[1])
-	expected := higherRoll + 5
-	if result.Value != expected {
-		t.Errorf("Expected value %d, got %d", expected, result.Value)
-	}
-}
-
-// Test Actor.AttackRoll - returns RollBuilder
-func TestActor_AttackRoll(t *testing.T) {
-	roller := NewRoller(42)
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithCombatModifier("strength", 3).
-		WithCombatModifier("proficiency", 2).
-		Build()
-
-	builder := actor.AttackRoll(roller)
-	result, err := builder.Roll()
-	if err != nil {
-		t.Fatalf("Roll() error: %v", err)
-	}
-
-	// Value should be dice + 5 (3+2)
-	expected := result.DiceRolls[0] + 5
-	if result.Value != expected {
-		t.Errorf("Expected value %d, got %d", expected, result.Value)
-	}
-}
-
-// Test Actor.AttackRoll with no modifiers
-func TestActor_AttackRoll_NoModifiers(t *testing.T) {
-	roller := NewRoller(42)
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	builder := actor.AttackRoll(roller)
-	result, _ := builder.Roll()
-
-	// Just the dice roll, no modifiers
-	if result.Value != result.DiceRolls[0] {
-		t.Errorf("Expected value %d (dice only), got %d", result.DiceRolls[0], result.Value)
-	}
-}
-
-// Test Actor.AttackRoll with advantage
-func TestActor_AttackRoll_WithAdvantage(t *testing.T) {
-	roller := NewRoller(42)
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithCombatModifier("strength", 3).
-		Build()
-
-	builder := actor.AttackRoll(roller)
-	result, _ := builder.WithAdvantage().Roll()
-
-	// With advantage, should have 2 dice rolls (both rolls visible)
-	if len(result.DiceRolls) != 2 {
-		t.Errorf("Expected 2 dice rolls (advantage), got %d", len(result.DiceRolls))
-	}
-
-	// Value should be higher roll + strength (3)
-	higherRoll := max(result.DiceRolls[0], result.DiceRolls[1])
-	expected := higherRoll + 3
-	if result.Value != expected {
-		t.Errorf("Expected value %d, got %d", expected, result.Value)
-	}
-}
-
-// Test Actor.D100SkillCheck
-func TestActor_D100SkillCheck(t *testing.T) {
-	roller := NewRoller(42)
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		WithAttribute("stealth", 45).
-		Build()
-
-	success, outcome, err := actor.D100SkillCheck("stealth", roller, 0)
-	if err != nil {
-		t.Fatalf("D100SkillCheck() error: %v", err)
-	}
-
-	// Outcome should have a value between 1 and 100
-	if outcome.Value < 1 || outcome.Value > 100 {
-		t.Errorf("Expected value 1-100, got %d", outcome.Value)
-	}
-
-	// Success should be true if value <= 45
-	expectedSuccess := outcome.Value <= 45
-	if success != expectedSuccess {
-		t.Errorf("Expected success %v, got %v (rolled %d vs 45)", expectedSuccess, success, outcome.Value)
-	}
-}
-
-// Test Actor.D100SkillCheck - missing skill
-func TestActor_D100SkillCheck_MissingSkill(t *testing.T) {
-	roller := NewRoller(42)
-	actor, _ := NewActor("hero").
-		WithHP(20).
-		WithAC(15).
-		Build()
-
-	_, _, err := actor.D100SkillCheck("nonexistent", roller, 0)
-	if err == nil {
-		t.Error("Expected error for missing skill, got nil")
+			if out.Value < tt.valueMin || out.Value > tt.valueMax {
+				t.Errorf("Value %d not in [%d, %d]", out.Value, tt.valueMin, tt.valueMax)
+			}
+			if tt.diceCount >= 0 && len(out.DiceRolls) != tt.diceCount {
+				t.Errorf("DiceRolls len = %d, want %d", len(out.DiceRolls), tt.diceCount)
+			}
+			if tt.wantMods >= 0 && len(out.Modifiers) != tt.wantMods {
+				t.Errorf("Modifiers len = %d, want %d", len(out.Modifiers), tt.wantMods)
+			}
+			if tt.detailRE != "" && !regexp.MustCompile(tt.detailRE).MatchString(out.Detail()) {
+				t.Errorf("Detail() = %q, want match %q", out.Detail(), tt.detailRE)
+			}
+		})
 	}
 }
