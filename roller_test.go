@@ -208,3 +208,71 @@ func TestRoller_Roll_Values(t *testing.T) {
 		}
 	})
 }
+
+func TestAdvantageTypeZeroValue(t *testing.T) {
+	var a AdvantageType
+	if a != Normal {
+		t.Errorf("zero AdvantageType = %v, want Normal", a)
+	}
+}
+
+func TestRoller_RollPercentile(t *testing.T) {
+	t.Run("bonus 0 is two dice then ones", func(t *testing.T) {
+		roller := NewRoller(42)
+		outcome, err := roller.RollPercentile(0)
+		if err != nil {
+			t.Fatalf("RollPercentile: %v", err)
+		}
+		if len(outcome.DiceRolls) != 2 {
+			t.Fatalf("DiceRolls len = %d, want 2 (1 tens + ones)", len(outcome.DiceRolls))
+		}
+		if outcome.Value < 1 || outcome.Value > 100 {
+			t.Errorf("Value %d not in 1–100", outcome.Value)
+		}
+	})
+
+	t.Run("bonus 1 rolls two tens plus ones", func(t *testing.T) {
+		roller := NewRoller(42)
+		outcome, err := roller.RollPercentile(1)
+		if err != nil {
+			t.Fatalf("RollPercentile: %v", err)
+		}
+		if len(outcome.DiceRolls) != 3 {
+			t.Fatalf("DiceRolls len = %d, want 3 (2 tens + ones)", len(outcome.DiceRolls))
+		}
+		if outcome.Value < 1 || outcome.Value > 100 {
+			t.Errorf("Value %d not in 1–100", outcome.Value)
+		}
+	})
+
+	t.Run("penalty 2 rolls three tens plus ones", func(t *testing.T) {
+		roller := NewRoller(42)
+		outcome, err := roller.RollPercentile(-2)
+		if err != nil {
+			t.Fatalf("RollPercentile: %v", err)
+		}
+		if len(outcome.DiceRolls) != 4 {
+			t.Fatalf("DiceRolls len = %d, want 4 (3 tens + ones)", len(outcome.DiceRolls))
+		}
+		if outcome.Value < 1 || outcome.Value > 100 {
+			t.Errorf("Value %d not in 1–100", outcome.Value)
+		}
+	})
+}
+
+func TestRoller_ConcurrentRolls(t *testing.T) {
+	roller := NewRandomRoller()
+	const n = 50
+	errCh := make(chan error, n)
+	for range n {
+		go func() {
+			_, err := roller.Dice(1, 20).Roll()
+			errCh <- err
+		}()
+	}
+	for range n {
+		if err := <-errCh; err != nil {
+			t.Errorf("Roll: %v", err)
+		}
+	}
+}

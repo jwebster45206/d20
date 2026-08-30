@@ -31,11 +31,26 @@ func TestActorBuilder_NewActorAndBuild(t *testing.T) {
 
 // Test ActorBuilder validation
 func TestActorBuilder_BuildValidation(t *testing.T) {
-	// HP must be > 0
-	_, err := NewActor("test").Build()
-	if err == nil {
-		t.Error("Expected error for HP <= 0, got nil")
-	}
+	t.Run("HP must be > 0", func(t *testing.T) {
+		_, err := NewActor("test").WithAC(10).Build()
+		if err == nil {
+			t.Error("Expected error for HP <= 0, got nil")
+		}
+	})
+
+	t.Run("AC must be > 0", func(t *testing.T) {
+		_, err := NewActor("test").WithHP(10).Build()
+		if err == nil {
+			t.Error("Expected error for AC <= 0, got nil")
+		}
+	})
+
+	t.Run("empty ID after normalization", func(t *testing.T) {
+		_, err := NewActor("@@@").WithHP(10).WithAC(10).Build()
+		if err == nil {
+			t.Error("Expected error for empty ID, got nil")
+		}
+	})
 }
 
 // Test ActorBuilder.WithAttribute
@@ -623,4 +638,43 @@ func TestActor_D100SkillCheck_MissingSkill(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for missing skill, got nil")
 	}
+}
+
+func TestActor_D100SkillCheck_BonusAndPenalty(t *testing.T) {
+	actor, err := NewActor("hero").
+		WithHP(20).
+		WithAC(15).
+		WithAttribute("stealth", 45).
+		Build()
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	t.Run("bonus die", func(t *testing.T) {
+		success, outcome, err := actor.D100SkillCheck("stealth", NewRoller(42), 1)
+		if err != nil {
+			t.Fatalf("D100SkillCheck: %v", err)
+		}
+		if len(outcome.DiceRolls) != 3 {
+			t.Errorf("DiceRolls len = %d, want 3", len(outcome.DiceRolls))
+		}
+		expectedSuccess := outcome.Value <= 45
+		if success != expectedSuccess {
+			t.Errorf("success = %v, want %v (rolled %d)", success, expectedSuccess, outcome.Value)
+		}
+	})
+
+	t.Run("penalty die", func(t *testing.T) {
+		success, outcome, err := actor.D100SkillCheck("stealth", NewRoller(42), -1)
+		if err != nil {
+			t.Fatalf("D100SkillCheck: %v", err)
+		}
+		if len(outcome.DiceRolls) != 3 {
+			t.Errorf("DiceRolls len = %d, want 3", len(outcome.DiceRolls))
+		}
+		expectedSuccess := outcome.Value <= 45
+		if success != expectedSuccess {
+			t.Errorf("success = %v, want %v (rolled %d)", success, expectedSuccess, outcome.Value)
+		}
+	})
 }

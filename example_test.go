@@ -450,7 +450,7 @@ func Example_withRoller() {
 func Example_rolledCharacterCreation() {
 	roller := d20.NewRoller(42)
 
-	// Roll all 6 ability scores using 4d6 keep highest 3
+	// Roll all 6 ability scores using 3d6
 	attrs := map[string]string{
 		"strength":     "3d6",
 		"dexterity":    "3d6",

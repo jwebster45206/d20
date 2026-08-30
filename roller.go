@@ -7,11 +7,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 // Roller handles dice rolling with a seedable random number generator.
+// A single *Roller may be used from multiple goroutines; *RollBuilder is not
+// safe for concurrent use.
 type Roller struct {
+	mu  sync.Mutex
 	rng *rand.Rand
 }
 
@@ -194,6 +198,9 @@ func (rb *RollBuilder) Roll() (RollOutcome, error) {
 		return RollOutcome{}, errDieFacesZero
 	}
 
+	rb.roller.mu.Lock()
+	defer rb.roller.mu.Unlock()
+
 	// Roll the dice with advantage/disadvantage
 	var rolls []int
 	var diceTotal int
@@ -238,4 +245,60 @@ func (rb *RollBuilder) Roll() (RollOutcome, error) {
 	}
 
 	return NewRollOutcome(rb.rollCount, rb.dieFaces, rolls, rb.modifiers, diceTotal+modifierTotal), nil
+}
+
+// RollPercentile rolls a Call of Cthulhu-style d100 (tens digit + ones digit, 00 = 100).
+// This is distinct from Roll("1d100"), which is a uniform 1–100 die.
+//
+// The bonus parameter implements bonus/penalty tens dice:
+//   - bonus > 0: roll (1+bonus) d10s for tens, take the lowest (better chance)
+//   - bonus < 0: roll (1+|bonus|) d10s for tens, take the highest (worse chance)
+//   - bonus = 0: one tens d10 and one ones d10
+//
+// DiceRolls is the tens d10 results followed by the ones d10 (each 0–9).
+// Value is the Call of Cthulhu-style result (1–100).
+func (r *Roller) RollPercentile(bonus int) (RollOutcome, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	tensCount := 1
+	if bonus > 0 {
+		tensCount = bonus + 1
+	} else if bonus < 0 {
+		tensCount = -bonus + 1
+	}
+
+	tensRolls := make([]int, tensCount)
+	for i := range tensCount {
+		tensRolls[i] = r.rng.Intn(10)
+	}
+	onesDigit := r.rng.Intn(10)
+
+	tensDigit := tensRolls[0]
+	if bonus > 0 {
+		tensDigit = tensRolls[0]
+		for _, roll := range tensRolls[1:] {
+			if roll < tensDigit {
+				tensDigit = roll
+			}
+		}
+	} else if bonus < 0 {
+		tensDigit = tensRolls[0]
+		for _, roll := range tensRolls[1:] {
+			if roll > tensDigit {
+				tensDigit = roll
+			}
+		}
+	}
+
+	result := tensDigit*10 + onesDigit
+	if result == 0 {
+		result = 100
+	}
+
+	shown := make([]int, 0, tensCount+1)
+	shown = append(shown, tensRolls...)
+	shown = append(shown, onesDigit)
+
+	return NewRollOutcome(1, 100, shown, nil, result), nil
 }

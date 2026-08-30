@@ -44,8 +44,11 @@ type Actor struct {
 //
 // Example:
 //
-//	fighter := d20.NewActor("ironpants Son of Arathorn", 45, 18).Build()
-//	fmt.Println(fighter.ID()) // "aragorn_son_of_arathorn"
+//	fighter, err := d20.NewActor("ironpants Son of Arathorn").
+//		WithHP(45).
+//		WithAC(18).
+//		Build()
+//	fmt.Println(fighter.ID()) // "ironpants_son_of_arathorn"
 func (a *Actor) ID() string {
 	return a.id
 }
@@ -234,7 +237,11 @@ func (a *Actor) GetCombatModifiers() []Modifier {
 // Example:
 //
 //	actor.SetAttribute("athletics", 5)
-//	result, _ := actor.SkillCheck("athletics", roller).WithAdvantage().Roll()
+//	builder, err := actor.SkillCheck("athletics", roller)
+//	if err != nil {
+//		return err
+//	}
+//	result, err := builder.WithAdvantage().Roll()
 func (a *Actor) SkillCheck(skill string, roller *Roller) (*RollBuilder, error) {
 	skillValue, exists := a.Attribute(skill)
 	if !exists {
@@ -269,10 +276,11 @@ func (a *Actor) AttackRoll(roller *Roller) *RollBuilder {
 	return builder
 }
 
-// D100SkillCheck performs a percentile skill check for d100 systems like Call of Cthulhu.
+// D100SkillCheck performs a percentile skill check (roll-under).
 // Returns success (rolled <= skill value), the roll outcome, and any error.
 //
-// The bonus parameter implements Call of Cthulhu's bonus/penalty die mechanic:
+// The roll uses RollPercentile, not Roll("1d100"): tens + ones with 00 = 100.
+// The bonus parameter implements Call of Cthulhu-style bonus/penalty tens dice:
 //   - bonus > 0: Roll multiple d10s for tens digit, take the LOWEST (better chance)
 //   - bonus < 0: Roll multiple d10s for tens digit, take the HIGHEST (worse chance)
 //   - bonus = 0: Normal d100 roll (1d10 for tens, 1d10 for ones)
@@ -289,54 +297,16 @@ func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus int) (bool, R
 		return false, RollOutcome{}, fmt.Errorf("skill %q not found in actor attributes", skill)
 	}
 
-	var tensDigit, onesDigit int
-
-	if bonus == 0 {
-		// Normal d100: 1d10 for tens, 1d10 for ones
-		tensDigit = (roller.rng.Intn(10)) * 10
-		onesDigit = roller.rng.Intn(10)
-	} else if bonus > 0 {
-		// Bonus die: Roll (1 + bonus) d10s for tens, take LOWEST
-		rolls := bonus + 1
-		bestTens := 9 // Start with worst
-		for range rolls {
-			roll := roller.rng.Intn(10)
-			if roll < bestTens {
-				bestTens = roll
-			}
-		}
-		tensDigit = bestTens * 10
-		onesDigit = roller.rng.Intn(10)
-	} else { // bonus < 0
-		// Penalty die: Roll (1 + |bonus|) d10s for tens, take HIGHEST
-		rolls := -bonus + 1
-		worstTens := 0 // Start with best
-		for range rolls {
-			roll := roller.rng.Intn(10)
-			if roll > worstTens {
-				worstTens = roll
-			}
-		}
-		tensDigit = worstTens * 10
-		onesDigit = roller.rng.Intn(10)
+	outcome, err := roller.RollPercentile(bonus)
+	if err != nil {
+		return false, RollOutcome{}, err
 	}
 
-	// Calculate final d100 result (00 = 100)
-	result := tensDigit + onesDigit
-	if result == 0 {
-		result = 100
-	}
-
-	// Success if rolled <= skill value
-	success := result <= skillValue
-
-	// Create roll outcome with skill modifier shown
-	rolls := []int{result}
+	success := outcome.Value <= skillValue
 	modifiers := []Modifier{
 		{Value: skillValue, Reason: fmt.Sprintf("%s (target)", strings.ToLower(skill))},
 	}
-
-	outcome := NewRollOutcome(1, 100, rolls, modifiers, result)
+	outcome = NewRollOutcome(1, 100, outcome.DiceRolls, modifiers, outcome.Value)
 
 	return success, outcome, nil
 }

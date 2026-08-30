@@ -3,13 +3,13 @@
 [![CI](https://github.com/jwebster45206/d20/actions/workflows/ci.yml/badge.svg)](https://github.com/jwebster45206/d20/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/jwebster45206/d20.svg)](https://pkg.go.dev/github.com/jwebster45206/d20)
 
-A Go library for dice rolling and D20 system mechanics, designed with 5e SRD compatibility in mind. This library provides a foundation for tabletop RPG applications with clean interfaces for dice rolling, modifiers, and basic actor statistics.
+A Go library for dice rolling and tabletop RPG helpers: notation and fluent d20-style rolls, named modifiers, advantage/disadvantage, and a simple actor model. It is not a rules engine and does not implement SRD procedures such as ability modifiers or proficiency.
 
 ## Features
 
 - **Dice Shorthand**: Parse standard string notation like "1d20+3" or "2d6"
-- **Dice Longhand**: Fluent builder API with support for all dice combinations, named modifiers, and advantage/disadvantage
-- **5e SRD Compatible**: Follows D&D 5th Edition System Reference Document conventions
+- **Dice Longhand**: Fluent builder API with named modifiers and advantage/disadvantage
+- **5e-style rolls**: d20 checks, advantage/disadvantage, and named modifiers (you supply the numbers)
 - **Actor System**: Basic character/creature representation for combat and skill checks
 - **Detailed Roll Results**: Bioware-inspired roll result formatting with full breakdowns
 
@@ -74,7 +74,7 @@ func NewRandomRoller() *Roller
 func (r *Roller) Roll(notation string) (RollOutcome, error)
 
 // Start building a roll - for complex scenarios
-func (r *Roller) Dice(rollCount, dieFaces int) *RollBuilder
+func (r *Roller) Dice(rollCount, dieFaces uint) *RollBuilder
 
 // RollBuilder - fluent API for configuring rolls
 type RollBuilder struct { /* private fields */ }
@@ -84,7 +84,8 @@ func (rb *RollBuilder) WithModifiers(modifiers map[string]int) *RollBuilder
 func (rb *RollBuilder) WithAdvantage() *RollBuilder
 func (rb *RollBuilder) WithDisadvantage() *RollBuilder
 func (rb *RollBuilder) Normal() *RollBuilder
-func (rb *RollBuilder) Roll() (*RollOutcome, error)
+func (rb *RollBuilder) Roll() (RollOutcome, error)
+func (r *Roller) RollPercentile(bonus int) (RollOutcome, error)
 ```
 
 **Dice Notation Shorthand:**
@@ -94,7 +95,7 @@ The `Roll()` method accepts standard dice notation strings:
 - `"d20"` - Shorthand for 1d20
 - `"2d6+3"` - Roll two 6-sided dice and add 3
 - `"3d8-2"` - Roll three 8-sided dice and subtract 2
-- `"1d100"` - Percentile dice
+- `"1d100"` - Uniform 1–100 (notation). For Call of Cthulhu-style tens+ones (`00` = 100), use `RollPercentile`.
 
 **Advantage/Disadvantage Mechanics:**
 - **Advantage**: Rolls 2 dice, uses the higher value, returns both in `DiceRolls`
@@ -151,8 +152,8 @@ func (ab *ActorBuilder) WithRolledAttributes(attrs map[string]string) *ActorBuil
 func (a *Actor) ID() string               // Normalized identifier
 func (a *Actor) HP() int                  // Current HP
 func (a *Actor) MaxHP() int               // Maximum HP
-func (a *Actor) SetHP(hp int)             // Set current HP (0 to max)
-func (a *Actor) SetMaxHP(maxHP int)       // Set maximum HP (auto-adjusts current if needed)
+func (a *Actor) SetHP(hp int) error
+func (a *Actor) SetMaxHP(maxHP int) error
 func (a *Actor) AddHP(amount int)         // Increase HP (won't exceed max)
 func (a *Actor) SubHP(amount int)         // Reduce HP (won't go below 0)
 func (a *Actor) ResetHP()                 // Restore to max HP
@@ -160,7 +161,7 @@ func (a *Actor) IsKnockedOut() bool       // Returns true if HP <= 0
 
 // AC and Initiative
 func (a *Actor) AC() int
-func (a *Actor) SetAC(ac int)
+func (a *Actor) SetAC(ac int) error
 func (a *Actor) Initiative() int
 func (a *Actor) SetInitiative(init int)
 
@@ -179,7 +180,7 @@ func (a *Actor) RemoveCombatModifier(name string)
 // Roll Methods
 func (a *Actor) SkillCheck(skill string, roller *Roller) (*RollBuilder, error)
 func (a *Actor) AttackRoll(roller *Roller) *RollBuilder
-func (a *Actor) D100SkillCheck(skill string, roller *Roller) (bool, *RollOutcome, error)
+func (a *Actor) D100SkillCheck(skill string, roller *Roller, bonus int) (bool, RollOutcome, error)
 ```
 
 ### Creating Actors
@@ -277,7 +278,7 @@ result, _ := builder.WithAdvantage().Roll()             // Attack with advantage
 result, _ := builder.WithModifier("bless", 1).Roll()    // Add temporary modifier
 
 // D100SkillCheck - Percentile system (Call of Cthulhu, etc.)
-success, outcome, err := actor.D100SkillCheck("stealth", roller)
+success, outcome, err := actor.D100SkillCheck("stealth", roller, 0)
 ```
 
 #### Advantage/Disadvantage Mechanics
@@ -288,27 +289,17 @@ Advantage and disadvantage are configured on the `RollBuilder`:
 - **Disadvantage**: Rolls 2 dice, uses lower, shows both in `DiceRolls: [6, 8]`
 - **Normal**: Rolls standard number of dice
 
-This system is core to 5e and applies to attack rolls, skill checks, and saving throws. The library returns all dice rolled for transparency.
+This system is common in 5e-style play for attack rolls, skill checks, and saving throws. The library returns all dice rolled for transparency.
 
 #### D100 System Support
 
-The library also supports d100/percentile systems like Call of Cthulhu:
+The library supports d100/percentile rolls in two ways:
 
-- **D100SkillCheck**: Roll d100, succeed if result ≤ skill value
-- **Bonus Die**: Roll 2d10 for tens digit, take the better result (equivalent to advantage)
-- **Penalty Die**: Roll 2d10 for tens digit, take the worse result (equivalent to disadvantage)
-- **Combat**: Uses skill checks (Fighting, Firearms, etc.) rather than separate attack rolls
-
-#### Custom Dice Systems
-
-#### D100 System Support
-
-The library supports d100/percentile systems like Call of Cthulhu:
-
-- **D100SkillCheck**: Roll d100, succeed if result ≤ skill value
-- **Bonus Die** (bonus > 0): Roll multiple d10s for tens digit, take the LOWEST (better chance)
-- **Penalty Die** (bonus < 0): Roll multiple d10s for tens digit, take the HIGHEST (worse chance)
-- **Combat**: Uses skill checks (Fighting, Firearms, etc.) rather than separate attack rolls
+- **`Roll("1d100")`**: Uniform 1–100 via dice notation (same as any other die).
+- **`RollPercentile` / `D100SkillCheck`**: Call of Cthulhu-style tens + ones (`00` = 100), with optional bonus/penalty tens dice.
+  - **Bonus** (`bonus > 0`): Roll extra d10s for tens, take the LOWEST (better chance)
+  - **Penalty** (`bonus < 0`): Roll extra d10s for tens, take the HIGHEST (worse chance)
+  - **Combat**: Use skill checks (Fighting, Firearms, etc.) rather than a separate attack roll
 
 ### Skill Checks
 
@@ -326,7 +317,7 @@ builder, _ = actor.SkillCheck("perception", roller)
 result, _ = builder.WithDisadvantage().Roll()  // With disadvantage
 
 // Call of Cthulhu skill checks (d100, roll under skill value)
-success, outcome, _ := investigator.D100SkillCheck("stealth", roller)
+success, outcome, _ := investigator.D100SkillCheck("stealth", roller, 0)
 
 // Check success for d100 systems
 if success {
@@ -335,27 +326,19 @@ if success {
 }
 ```
 
-## Game System Compliance
+## Game systems
 
-### D&D 5th Edition SRD
+### 5e-style helpers
 
-This library follows the D&D 5th Edition System Reference Document (SRD 5.2) under CC-BY licensing:
+This library provides helpers for common 5e-style rolls (polyhedral dice, d20 + named modifiers, advantage/disadvantage, HP/AC on an actor). It does not compute ability modifiers, proficiency bonuses, or other SRD procedures — callers supply those numbers.
 
-- **Dice Mechanics**: Standard polyhedral dice (d4, d6, d8, d10, d12, d20, d100)
-- **Ability Scores**: Six core abilities with standard modifiers
-- **Advantage/Disadvantage**: Roll twice, take higher/lower
-- **Proficiency Bonus**: Scalable bonus system
-- **Combat Stats**: AC, HP, Initiative as per SRD
+The [5e SRD](https://dnd.wizards.com/resources/systems-reference-document) is published by Wizards of the Coast under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). This repository does not include SRD text.
 
-### Call of Cthulhu®
+### Call of Cthulhu-style d100
 
-This library implements d100 percentile mechanics compatible with Call of Cthulhu® by Chaosium Inc:
+`RollPercentile` and `D100SkillCheck` implement compatible d100 roll-under mechanics (tens + ones, `00` = 100, bonus/penalty tens dice). They are not a Call of Cthulhu rules implementation.
 
-- **Percentile Skills**: Roll d100, succeed if result ≤ skill value
-- **Bonus/Penalty Dice**: Multiple d10s for tens digit, take best/worst
-- **Roll-Under System**: Success determined by rolling under skill percentage
-
-Call of Cthulhu® is a registered trademark of Chaosium Inc. This library implements compatible game mechanics but does not include copyrighted content from Call of Cthulhu sourcebooks.
+Call of Cthulhu® is a registered trademark of Chaosium Inc. This library does not include copyrighted content from Call of Cthulhu sourcebooks.
 
 ## Examples
 
@@ -515,7 +498,7 @@ investigator.IncrementAttribute("sanity", 1)  // Therapy or rest
 investigator.DecrementAttribute("sanity", 3)  // Witnessed something horrifying     
 
 // Perform d100 skill checks
-success, outcome, _ := investigator.D100SkillCheck("stealth", roller)
+success, outcome, _ := investigator.D100SkillCheck("stealth", roller, 0)
 if success {
     skillValue, _ := investigator.Attribute("stealth")
     fmt.Printf("Stealth succeeded: rolled %d ≤ %d\n", outcome.Value, skillValue)
@@ -524,7 +507,7 @@ if success {
 }
 
 // Combat using Fighting skill
-success, outcome, _ = investigator.D100SkillCheck("fighting", roller)
+success, outcome, _ = investigator.D100SkillCheck("fighting", roller, 0)
 ```
 
 ## Character Creation Workflows
@@ -551,7 +534,7 @@ fighter, _ := d20.NewActor("Hrothgar").
     WithAC(16).
     Build()
 
-// Alternative: Roll 4d6 per stat (simulates rolling 4 and dropping lowest mentally)
+// Classic 3d6 in order (keep-highest notation is not implemented; see Future Enhancements)
 wizard, _ := d20.NewActor("Gandalf").
     WithRoller(roller).
     WithRolledAttributes(map[string]string{
