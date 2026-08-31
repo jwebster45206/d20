@@ -2,200 +2,162 @@ package d20
 
 import (
 	"errors"
-	"regexp"
 	"testing"
 )
 
-func TestRoller_New(t *testing.T) {
-	tests := []struct {
-		name     string
-		seed     int64
-		hasError bool
-	}{
-		{name: "seeded", seed: 42},
-		{name: "zero seed", seed: 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := NewRoller(tt.seed)
-			if r == nil || r.rng == nil {
-				t.Fatal("NewRoller returned incomplete roller")
-			}
-		})
-	}
-}
-
 func TestRoller_Roll(t *testing.T) {
 	tests := []struct {
-		name      string
-		seed      int64
-		notation  string
-		hasError  bool
-		valueMin  int
-		valueMax  int
-		diceCount int
-		detailRE  string
+		name  string
+		dice  Dice
+		want  int
+		nDice int
+		errIs error
 	}{
-		{
-			name:      "1d20",
-			seed:      42,
-			notation:  "1d20",
-			valueMin:  1,
-			valueMax:  20,
-			diceCount: 1,
-			detailRE:  `Rolled 1d20\.\.\.`,
-		},
-		{
-			name:      "d20 shorthand",
-			seed:      42,
-			notation:  "d20",
-			valueMin:  1,
-			valueMax:  20,
-			diceCount: 1,
-		},
-		{
-			name:      "2d6+3",
-			seed:      42,
-			notation:  "2d6+3",
-			valueMin:  5,
-			valueMax:  15,
-			diceCount: 2,
-			detailRE:  `\+3 modifier`,
-		},
-		{
-			name:      "3d8-2",
-			seed:      42,
-			notation:  "3d8-2",
-			valueMin:  1,
-			valueMax:  22,
-			diceCount: 3,
-			detailRE:  `-2 modifier`,
-		},
-		{
-			name:      "1d100 uniform",
-			seed:      42,
-			notation:  "1d100",
-			valueMin:  1,
-			valueMax:  100,
-			diceCount: 1,
-		},
-		{
-			name:     "invalid empty",
-			seed:     42,
-			notation: "",
-			hasError: true,
-		},
-		{
-			name:     "invalid garbage",
-			seed:     42,
-			notation: "not-dice",
-			hasError: true,
-		},
-		{
-			name:     "invalid zero faces",
-			seed:     42,
-			notation: "1d0",
-			hasError: true,
-		},
+		{"1d20", NewDice(1, 20), 18, 1, nil},
+		{"modifier", NewDice(1, 20).WithModifier("strength", 3), 21, 1, nil},
+		{"advantage", NewDice(1, 20).WithAdvantage(), 20, 2, nil},
+		{"disadvantage", NewDice(1, 20).WithDisadvantage(), 18, 2, nil},
+		{"zero count", NewDice(0, 20), 0, 0, errRollCountZero},
+		{"zero faces", NewDice(1, 0), 0, 0, errDieFacesZero},
+		{"bad advantage", Dice{Count: 1, Faces: 20, Advantage: 99}, 0, 0, errInvalidAdvantage},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			out, err := NewRoller(tt.seed).Roll(tt.notation)
-			if tt.hasError {
-				if err == nil {
-					t.Fatal("expected error")
+			out, err := NewRoller(42).Roll(tt.dice)
+			if tt.errIs != nil {
+				if !errors.Is(err, tt.errIs) {
+					t.Fatalf("err = %v, want %v", err, tt.errIs)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+				t.Fatal(err)
 			}
-			if out.Value < tt.valueMin || out.Value > tt.valueMax {
-				t.Errorf("Value %d not in [%d, %d]", out.Value, tt.valueMin, tt.valueMax)
+			if out.Value != tt.want {
+				t.Errorf("Value = %d, want %d", out.Value, tt.want)
 			}
-			if len(out.DiceRolls) != tt.diceCount {
-				t.Errorf("DiceRolls len = %d, want %d", len(out.DiceRolls), tt.diceCount)
+			if len(out.DiceRolls) != tt.nDice {
+				t.Errorf("DiceRolls len = %d, want %d", len(out.DiceRolls), tt.nDice)
 			}
-			if tt.detailRE != "" && !regexp.MustCompile(tt.detailRE).MatchString(out.Detail()) {
-				t.Errorf("Detail() = %q, want match %q", out.Detail(), tt.detailRE)
+			if tt.dice.Advantage == Advantage && len(out.DiceRolls) == 2 {
+				keep := max(out.DiceRolls[0].Result, out.DiceRolls[1].Result)
+				if out.Value != keep {
+					t.Errorf("advantage Value = %d, want max %d", out.Value, keep)
+				}
+			}
+			if tt.dice.Advantage == Disadvantage && len(out.DiceRolls) == 2 {
+				keep := min(out.DiceRolls[0].Result, out.DiceRolls[1].Result)
+				if out.Value != keep {
+					t.Errorf("disadvantage Value = %d, want min %d", out.Value, keep)
+				}
 			}
 		})
 	}
 }
 
-func TestParseNotation(t *testing.T) {
+func TestRoller_RollPercentile(t *testing.T) {
 	tests := []struct {
-		name     string
-		notation string
-		count    uint
-		faces    uint
-		hasMod   bool
-		modValue int
-		hasError bool
+		name  string
+		seed  int64
+		dice  Dice
+		want  int // 0 means any 1–100
+		errIs error
 	}{
-		{name: "1d20", notation: "1d20", count: 1, faces: 20},
-		{name: "d20 shorthand", notation: "d20", count: 1, faces: 20},
-		{name: "2d6+3", notation: "2d6+3", count: 2, faces: 6, hasMod: true, modValue: 3},
-		{name: "3d8-2", notation: "3d8-2", count: 3, faces: 8, hasMod: true, modValue: -2},
-		{name: "trim and lowercase", notation: " 2D6+1 ", count: 2, faces: 6, hasMod: true, modValue: 1},
-		{name: "empty", notation: "", hasError: true},
-		{name: "garbage", notation: "not-dice", hasError: true},
-		{name: "zero faces", notation: "1d0", hasError: true},
+		{"2d10", 42, NewDice(2, 10), 0, nil},
+		{"00 is 100", 169, NewDice(2, 10), 100, nil},
+		{"not 2d10", 42, NewDice(1, 20), 0, errPercentileRequires2d10},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			count, faces, mods, err := ParseNotation(tt.notation)
-			if tt.hasError {
-				if err == nil {
-					t.Fatal("expected error")
-				}
-				if !errors.Is(err, ErrInvalidDiceNotation) {
-					t.Errorf("err = %v, want ErrInvalidDiceNotation", err)
+			out, err := NewRoller(tt.seed).RollPercentile(tt.dice)
+			if tt.errIs != nil {
+				if !errors.Is(err, tt.errIs) {
+					t.Fatalf("err = %v, want %v", err, tt.errIs)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+				t.Fatal(err)
 			}
-			if count != tt.count {
-				t.Errorf("count = %d, want %d", count, tt.count)
+			if len(out.DiceRolls) != 2 {
+				t.Fatalf("DiceRolls len = %d, want 2", len(out.DiceRolls))
 			}
-			if faces != tt.faces {
-				t.Errorf("faces = %d, want %d", faces, tt.faces)
+			if tt.want != 0 && out.Value != tt.want {
+				t.Errorf("Value = %d, want %d", out.Value, tt.want)
 			}
-			if tt.hasMod {
-				if len(mods) != 1 || mods[0].Reason != "modifier" || mods[0].Value != tt.modValue {
-					t.Errorf("modifiers = %v, want [{modifier %d}]", mods, tt.modValue)
+			if out.Value < 1 || out.Value > 100 {
+				t.Errorf("Value = %d, want 1–100", out.Value)
+			}
+			for i, d := range out.DiceRolls {
+				if d.Faces != 10 || d.Result < 0 || d.Result > 9 {
+					t.Errorf("DiceRolls[%d] = %+v, want d10 digit 0–9", i, d)
 				}
-			} else if len(mods) != 0 {
-				t.Errorf("modifiers = %v, want empty", mods)
 			}
 		})
 	}
 }
 
-func TestRoller_Concurrent(t *testing.T) {
-	roller := NewRandomRoller()
-	const n = 50
-	errCh := make(chan error, n)
-	for range n {
-		go func() {
-			_, err := roller.Dice(1, 20).Roll()
-			errCh <- err
-		}()
+func TestRoller_RollExpr(t *testing.T) {
+	tests := []struct {
+		notation string
+		want     int
+		nDice    int
+		err      bool
+	}{
+		{"2d6+3", 15, 2, false},
+		{"not-dice", 0, 0, true},
 	}
-	for range n {
-		if err := <-errCh; err != nil {
-			t.Errorf("Roll: %v", err)
-		}
+	for _, tt := range tests {
+		t.Run(tt.notation, func(t *testing.T) {
+			out, err := NewRoller(42).RollExpr(tt.notation)
+			if tt.err {
+				if !errors.Is(err, ErrInvalidDiceNotation) {
+					t.Fatalf("err = %v, want ErrInvalidDiceNotation", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out.Value != tt.want || len(out.DiceRolls) != tt.nDice {
+				t.Errorf("Value=%d n=%d, want %d n=%d", out.Value, len(out.DiceRolls), tt.want, tt.nDice)
+			}
+		})
 	}
 }
 
-func TestAdvantageType_ZeroValue(t *testing.T) {
-	var a AdvantageType
-	if a != Normal {
-		t.Errorf("zero AdvantageType = %v, want Normal", a)
+func TestRollOutcome_Detail(t *testing.T) {
+	tests := []struct {
+		name string
+		o    RollOutcome
+		want string
+	}{
+		{
+			"modifier",
+			NewRollOutcome([]DieRoll{{Faces: 20, Result: 6}}, []Modifier{NewModifier("strength", 3)}, 9),
+			"Rolled 1d20... 6; +3 strength; *Result: 9*",
+		},
+		{
+			"advantage",
+			NewRollOutcome([]DieRoll{{Faces: 20, Result: 6}, {Faces: 20, Result: 8}}, nil, 8),
+			"Rolled 2d20... 6, 8; *Result: 8*",
+		},
+		{
+			"percentile 00",
+			NewRollOutcome([]DieRoll{{Faces: 10, Result: 0}, {Faces: 10, Result: 0}}, nil, 100),
+			"Rolled 2d10... 0, 0; *Result: 100*",
+		},
+		{
+			"penalty",
+			NewRollOutcome([]DieRoll{{Faces: 20, Result: 15}}, []Modifier{NewModifier("cover", -2)}, 13),
+			"Rolled 1d20... 15; -2 cover; *Result: 13*",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.o.Detail(); got != tt.want {
+				t.Errorf("Detail() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

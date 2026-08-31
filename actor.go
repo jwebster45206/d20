@@ -87,61 +87,47 @@ func (a *Actor) IsKnockedOut() bool {
 	return a.HP <= 0
 }
 
-// SkillCheck creates a DiceManager for a skill check (1d20 + the stored attribute value).
+// SkillDice returns 1d20 plus the stored attribute value as a modifier.
 // The library does not derive 5e ability modifiers; callers store the bonus they want added.
 // The skill name is lowercased for lookup; map keys are lowercase by convention.
 // Returns an error if the skill is missing.
 //
-// Example:
-//
-//	actor.Attributes["athletics"] = 5
-//	builder, err := actor.SkillCheck("athletics", roller)
-//	if err != nil {
-//		return err
-//	}
-//	result, err := builder.WithAdvantage().Roll()
-func (a *Actor) SkillCheck(skill string, roller *Roller) (*DiceManager, error) {
+//	d, err := actor.SkillDice("athletics")
+//	out, err := roller.Roll(d.WithAdvantage())
+func (a *Actor) SkillDice(skill string) (Dice, error) {
 	skill = strings.ToLower(skill)
 	skillValue, exists := a.Attributes[skill]
 	if !exists {
-		return nil, fmt.Errorf("skill %q not found in actor attributes", skill)
+		return Dice{}, fmt.Errorf("skill %q not found in actor attributes", skill)
 	}
-
-	return roller.Dice(1, 20).WithModifier(skill, skillValue), nil
+	return NewDice(1, 20).WithModifier(skill, skillValue), nil
 }
 
-// StrikeRoll creates a DiceManager for a strike (attack) roll (1d20).
-// Only the named modifier keys are applied; missing keys are skipped.
-// Key names are lowercased for lookup; map keys are lowercase by convention.
-// Situational bonuses go on the returned DiceManager.
+// StrikeDice returns 1d20 with the named modifier keys applied.
+// Missing keys are skipped. Key names are lowercased for lookup.
+// Situational extras go on the returned Dice (WithModifier) without mutating this spec.
 //
-// Example:
-//
-//	actor.Modifiers["strength"] = 5
-//	actor.Modifiers["striking"] = 3
-//	result, _ := actor.StrikeRoll(roller, "strength", "striking").WithAdvantage().Roll()
-func (a *Actor) StrikeRoll(roller *Roller, keys ...string) *DiceManager {
-	builder := roller.Dice(1, 20)
+//	out, _ := roller.Roll(actor.StrikeDice("strength", "striking").WithAdvantage())
+func (a *Actor) StrikeDice(keys ...string) Dice {
+	d := NewDice(1, 20)
 	for _, name := range keys {
 		name = strings.ToLower(name)
 		if v, ok := a.Modifiers[name]; ok {
-			builder = builder.WithModifier(name, v)
+			d = d.WithModifier(name, v)
 		}
 	}
-	return builder
+	return d
 }
 
-// D100SkillCheck returns a 2d10 DiceManager for a roll-under skill check.
-// The skill name is lowercased for lookup; map keys are lowercase by convention.
+// D100SkillDice returns 2d10 for a roll-under skill check.
 // Errors if the skill is missing. Compare outcome.Value to Attributes[skill] for success.
 //
-//	builder, _ := actor.D100SkillCheck("stealth", roller)
-//	outcome, _ := builder.RollPercentile()
-func (a *Actor) D100SkillCheck(skill string, roller *Roller) (*DiceManager, error) {
+//	d, _ := actor.D100SkillDice("stealth")
+//	out, _ := roller.RollPercentile(d)
+func (a *Actor) D100SkillDice(skill string) (Dice, error) {
 	skill = strings.ToLower(skill)
 	if _, exists := a.Attributes[skill]; !exists {
-		return nil, fmt.Errorf("skill %q not found in actor attributes", skill)
+		return Dice{}, fmt.Errorf("skill %q not found in actor attributes", skill)
 	}
-
-	return roller.Dice(2, 10), nil
+	return NewDice(2, 10), nil
 }
