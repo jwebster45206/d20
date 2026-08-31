@@ -1,198 +1,162 @@
 package d20
 
-import "errors"
-
-var (
-	errRollCountZero          = errors.New("rollCount must be greater than 0")
-	errDieFacesZero           = errors.New("dieFaces must be greater than 0")
-	errPercentileRequires2d10 = errors.New("RollPercentile requires 2d10 (or unset count/faces to assume 2d10)")
+import (
+	"errors"
+	"slices"
 )
 
-// DiceManager is a pending roll. Get one from Roller.Dice or DiceExpr,
-// chain WithModifier / WithAdvantage, then call Roll.
-type DiceManager struct {
-	RollCount     uint
-	DieFaces      uint
-	Modifiers     []Modifier
-	AdvantageType AdvantageType
+var (
+	ErrNilRoller              = errors.New("nil roller")
+	ErrRollCountZero          = errors.New("count must be greater than 0")
+	ErrDieFacesZero           = errors.New("faces must be greater than 0")
+	ErrInvalidAdvantage       = errors.New("invalid advantage type")
+	ErrPercentileRequires2d10 = errors.New("RollPercentile requires 2d10")
+)
 
-	roller *Roller
-	err    error
-}
-
-// Error returns the error from the last failed parse or terminal roll.
-// It is nil after a successful Roll or RollPercentile, and after construction
-// via Dice with no subsequent failure.
-func (dm *DiceManager) Error() error {
-	return dm.err
-}
-
-func (dm *DiceManager) fail(err error) (RollOutcome, error) {
-	dm.err = err
-	return RollOutcome{}, err
-}
-
-func (dm *DiceManager) succeed(outcome RollOutcome) (RollOutcome, error) {
-	dm.err = nil
-	return outcome, nil
-}
-
-// WithModifier adds a single modifier to the roll.
-// The modifier name is automatically lowercased for consistency.
+// Dice is a roll configuration: count, faces, modifiers, and advantage.
+// It is data. A Roller executes it.
 //
-// Example:
-//
-//	roller.Dice(1, 20).WithModifier("strength", 3).WithModifier("proficiency", 2).Roll()
-func (dm *DiceManager) WithModifier(name string, value int) *DiceManager {
-	dm.Modifiers = append(dm.Modifiers, NewModifier(name, value))
-	return dm
+//	out, err := roller.Roll(d20.NewDice(1, 20).WithModifier("strength", 3))
+type Dice struct {
+	Count     uint
+	Faces     uint
+	Modifiers []Modifier
+	Advantage AdvantageType
 }
 
-// WithModifiers adds multiple modifiers to the roll at once.
-// Accepts a map of name->value pairs. Names are automatically lowercased.
-//
-// Example:
-//
-//	mods := map[string]int{"strength": 3, "proficiency": 2}
-//	roller.Dice(1, 20).WithModifiers(mods).Roll()
-func (dm *DiceManager) WithModifiers(modifiers map[string]int) *DiceManager {
+// NewDice returns a Dice with the given count and faces.
+func NewDice(count, faces uint) Dice {
+	return Dice{Count: count, Faces: faces}
+}
+
+// WithModifier returns a copy with an added modifier. The name is lowercased.
+// The original Dice is not mutated.
+func (d Dice) WithModifier(name string, value int) Dice {
+	d.Modifiers = append(slices.Clone(d.Modifiers), NewModifier(name, value))
+	return d
+}
+
+// WithModifiers returns a copy with the map entries appended as modifiers.
+// Names are lowercased. The original Dice is not mutated.
+func (d Dice) WithModifiers(modifiers map[string]int) Dice {
+	d.Modifiers = slices.Clone(d.Modifiers)
 	for name, value := range modifiers {
-		dm.Modifiers = append(dm.Modifiers, NewModifier(name, value))
+		d.Modifiers = append(d.Modifiers, NewModifier(name, value))
 	}
-	return dm
+	return d
 }
 
-// WithAdvantage sets the roll to use advantage (roll twice, take higher).
-// 5e mechanic. Ignored by RollPercentile.
-//
-// Example:
-//
-//	roller.Dice(1, 20).WithAdvantage().Roll()
-func (dm *DiceManager) WithAdvantage() *DiceManager {
-	dm.AdvantageType = Advantage
-	return dm
+// WithAdvantage returns a copy that rolls twice per die and uses the higher of each pair.
+// Ignored by RollPercentile. The original Dice is not mutated.
+func (d Dice) WithAdvantage() Dice {
+	d.Modifiers = slices.Clone(d.Modifiers)
+	d.Advantage = Advantage
+	return d
 }
 
-// WithDisadvantage sets the roll to use disadvantage (roll twice, take lower).
-// 5e mechanic. Ignored by RollPercentile.
-//
-// Example:
-//
-//	roller.Dice(1, 20).WithDisadvantage().Roll()
-func (dm *DiceManager) WithDisadvantage() *DiceManager {
-	dm.AdvantageType = Disadvantage
-	return dm
+// WithDisadvantage returns a copy that rolls twice per die and uses the lower of each pair.
+// Ignored by RollPercentile. The original Dice is not mutated.
+func (d Dice) WithDisadvantage() Dice {
+	d.Modifiers = slices.Clone(d.Modifiers)
+	d.Advantage = Disadvantage
+	return d
 }
 
-// RollPercentile rolls a Call of Cthulhu-style d100 (tens digit + ones digit, 00 = 100).
-// This is distinct from Roll() / Roll("1d100"), which use standard 1–N die faces.
-// AdvantageType is ignored; this always rolls tens + ones.
-//
-// Requires 2d10. If both RollCount and DieFaces are unset (0), 2d10 is assumed.
-// Any other configuration returns an error.
-//
-// DiceRolls is always two d10 digits [tens, ones] (each Result 0–9).
-// Value is the percentile result (1–100) plus any configured modifiers.
-// Modifiers on the builder are included in the outcome and applied to Value.
-//
-// Example:
-//
-//	result, err := roller.Dice(2, 10).RollPercentile()
-//	result, err := roller.Dice(0, 0).RollPercentile() // assumes 2d10
-func (dm *DiceManager) RollPercentile() (RollOutcome, error) {
-	if err := dm.Error(); err != nil {
-		return dm.fail(err)
+func modifierTotal(mods []Modifier) int {
+	n := 0
+	for _, m := range mods {
+		n += m.Value
 	}
-	if dm.RollCount == 0 && dm.DieFaces == 0 {
-		dm.RollCount = 2
-		dm.DieFaces = 10
-	}
-	if dm.RollCount != 2 || dm.DieFaces != 10 {
-		return dm.fail(errPercentileRequires2d10)
-	}
-
-	dm.roller.mu.Lock()
-	defer dm.roller.mu.Unlock()
-
-	tensDigit := dm.roller.rng.IntN(10)
-	onesDigit := dm.roller.rng.IntN(10)
-
-	result := tensDigit*10 + onesDigit
-	if result == 0 {
-		result = 100
-	}
-
-	modifierTotal := 0
-	for _, mod := range dm.Modifiers {
-		modifierTotal += mod.Value
-	}
-
-	rolls := []DieRoll{
-		{Faces: 10, Result: tensDigit},
-		{Faces: 10, Result: onesDigit},
-	}
-	return dm.succeed(NewRollOutcome(rolls, dm.Modifiers, result+modifierTotal))
+	return n
 }
 
-// Roll executes the configured dice roll and returns the result.
-// This is the terminal method that performs the actual roll.
-//
-// Example:
-//
-//	result, err := roller.Dice(2, 6).WithModifier("strength", 3).Roll()
-func (dm *DiceManager) Roll() (RollOutcome, error) {
-	if err := dm.Error(); err != nil {
-		return dm.fail(err)
+// Roll executes d with this roller: standard 1–N faces, plus modifiers.
+// Advantage rolls twice per die and keeps the higher of each pair;
+// disadvantage keeps the lower. All rolls appear in DiceRolls.
+func (r *Roller) Roll(d Dice) (RollOutcome, error) {
+	if r == nil {
+		return RollOutcome{}, ErrNilRoller
 	}
-	if dm.RollCount == 0 {
-		return dm.fail(errRollCountZero)
+	if d.Count == 0 {
+		return RollOutcome{}, ErrRollCountZero
 	}
-	if dm.DieFaces == 0 {
-		return dm.fail(errDieFacesZero)
+	if d.Faces == 0 {
+		return RollOutcome{}, ErrDieFacesZero
+	}
+	switch d.Advantage {
+	case Normal, Advantage, Disadvantage:
+	default:
+		return RollOutcome{}, ErrInvalidAdvantage
 	}
 
-	dm.roller.mu.Lock()
-	defer dm.roller.mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	var rolls []DieRoll
 	var diceTotal int
-	faces := dm.DieFaces
+	faces := d.Faces
 
-	switch dm.AdvantageType {
+	switch d.Advantage {
 	case Normal:
-		rolls = make([]DieRoll, dm.RollCount)
-		for i := range dm.RollCount {
-			n := dm.roller.rng.IntN(int(faces)) + 1
+		rolls = make([]DieRoll, d.Count)
+		for i := range d.Count {
+			n := r.rng.IntN(int(faces)) + 1
 			rolls[i] = DieRoll{Faces: faces, Result: n}
 			diceTotal += n
 		}
 
 	case Advantage:
-		// Roll twice per die, keep all rolls but use higher values for total
-		rolls = make([]DieRoll, dm.RollCount*2)
-		for i := range dm.RollCount {
-			roll1 := dm.roller.rng.IntN(int(faces)) + 1
-			roll2 := dm.roller.rng.IntN(int(faces)) + 1
+		rolls = make([]DieRoll, d.Count*2)
+		for i := range d.Count {
+			roll1 := r.rng.IntN(int(faces)) + 1
+			roll2 := r.rng.IntN(int(faces)) + 1
 			rolls[i*2] = DieRoll{Faces: faces, Result: roll1}
 			rolls[i*2+1] = DieRoll{Faces: faces, Result: roll2}
 			diceTotal += max(roll1, roll2)
 		}
 
 	case Disadvantage:
-		rolls = make([]DieRoll, dm.RollCount*2)
-		for i := range dm.RollCount {
-			roll1 := dm.roller.rng.IntN(int(faces)) + 1
-			roll2 := dm.roller.rng.IntN(int(faces)) + 1
+		rolls = make([]DieRoll, d.Count*2)
+		for i := range d.Count {
+			roll1 := r.rng.IntN(int(faces)) + 1
+			roll2 := r.rng.IntN(int(faces)) + 1
 			rolls[i*2] = DieRoll{Faces: faces, Result: roll1}
 			rolls[i*2+1] = DieRoll{Faces: faces, Result: roll2}
 			diceTotal += min(roll1, roll2)
 		}
 	}
 
-	modifierTotal := 0
-	for _, mod := range dm.Modifiers {
-		modifierTotal += mod.Value
+	return NewRollOutcome(rolls, d.Modifiers, diceTotal+modifierTotal(d.Modifiers)), nil
+}
+
+// RollPercentile executes d as Call of Cthulhu-style d100 (tens + ones, 00 = 100).
+// Distinct from Roll(NewDice(1, 100)), which is a uniform 1–100 die.
+// Requires Count == 2 and Faces == 10. Advantage is ignored.
+//
+// DiceRolls is two d10 digits [tens, ones] (each Result 0–9).
+// Value is the percentile (1–100) plus modifiers.
+func (r *Roller) RollPercentile(d Dice) (RollOutcome, error) {
+	if r == nil {
+		return RollOutcome{}, ErrNilRoller
+	}
+	if d.Count != 2 || d.Faces != 10 {
+		return RollOutcome{}, ErrPercentileRequires2d10
 	}
 
-	return dm.succeed(NewRollOutcome(rolls, dm.Modifiers, diceTotal+modifierTotal))
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	tensDigit := r.rng.IntN(10)
+	onesDigit := r.rng.IntN(10)
+
+	result := tensDigit*10 + onesDigit
+	if result == 0 {
+		result = 100
+	}
+
+	rolls := []DieRoll{
+		{Faces: 10, Result: tensDigit},
+		{Faces: 10, Result: onesDigit},
+	}
+	return NewRollOutcome(rolls, d.Modifiers, result+modifierTotal(d.Modifiers)), nil
 }

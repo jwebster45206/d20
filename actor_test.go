@@ -267,8 +267,8 @@ func TestActor_Rolls(t *testing.T) {
 			var err error
 			switch tt.kind {
 			case "skill":
-				var builder *DiceManager
-				builder, err = actor.SkillCheck(tt.skill, roller)
+				var d Dice
+				d, err = actor.SkillDice(tt.skill)
 				if tt.hasError {
 					if err == nil {
 						t.Fatal("expected error")
@@ -276,27 +276,27 @@ func TestActor_Rolls(t *testing.T) {
 					return
 				}
 				if err != nil {
-					t.Fatalf("SkillCheck: %v", err)
+					t.Fatalf("SkillDice: %v", err)
 				}
 				if tt.advantage {
-					builder = builder.WithAdvantage()
+					d = d.WithAdvantage()
 				}
-				out, err = builder.Roll()
+				out, err = roller.Roll(d)
 				if err != nil {
 					t.Fatalf("Roll: %v", err)
 				}
 			case "strike":
-				builder := actor.StrikeRoll(roller, tt.strikeKeys...)
+				d := actor.StrikeDice(tt.strikeKeys...)
 				if tt.advantage {
-					builder = builder.WithAdvantage()
+					d = d.WithAdvantage()
 				}
-				out, err = builder.Roll()
+				out, err = roller.Roll(d)
 				if err != nil {
 					t.Fatalf("Roll: %v", err)
 				}
 			case "d100", "d100_mod":
-				var builder *DiceManager
-				builder, err = actor.D100SkillCheck(tt.skill, roller)
+				var d Dice
+				d, err = actor.D100SkillDice(tt.skill)
 				if tt.hasError {
 					if err == nil {
 						t.Fatal("expected error")
@@ -304,12 +304,12 @@ func TestActor_Rolls(t *testing.T) {
 					return
 				}
 				if err != nil {
-					t.Fatalf("D100SkillCheck: %v", err)
+					t.Fatalf("D100SkillDice: %v", err)
 				}
 				if tt.kind == "d100_mod" {
-					builder = builder.WithModifier(tt.modName, tt.modValue)
+					d = d.WithModifier(tt.modName, tt.modValue)
 				}
-				out, err = builder.RollPercentile()
+				out, err = roller.RollPercentile(d)
 				if err != nil {
 					t.Fatalf("RollPercentile: %v", err)
 				}

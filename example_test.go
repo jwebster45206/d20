@@ -6,22 +6,19 @@ import (
 	"github.com/jwebster45206/d20"
 )
 
-// Example_basicRoll demonstrates a simple dice roll.
 func Example_basicRoll() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Dice(1, 20).Roll()
+	result, _ := roller.Roll(d20.NewDice(1, 20))
 
 	fmt.Printf("Rolled: %d\n", result.Value)
 	// Output:
 	// Rolled: 18
 }
 
-// Example_diceExpr shows building a roll from notation, then chaining fluent modifiers.
 func Example_diceExpr() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.DiceExpr("2d6+3").
-		WithModifier("strength", 2).
-		Roll()
+	d, _ := d20.ParseDiceNotation("2d6+3")
+	result, _ := roller.Roll(d.WithModifier("strength", 2))
 
 	fmt.Printf("Roll: %d\n", result.Value)
 	fmt.Println(result.Detail())
@@ -30,35 +27,33 @@ func Example_diceExpr() {
 	// Rolled 2d6... 6, 6; +3 modifier, +2 strength; *Result: 17*
 }
 
-// Example_parseNotation shows inspecting dice notation without rolling.
-func Example_parseNotation() {
-	count, faces, mods, err := d20.ParseNotation("2d6+3")
+func Example_parseDiceNotation() {
+	d, err := d20.ParseDiceNotation("2d6+3")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%dd%d", count, faces)
-	if len(mods) > 0 {
-		fmt.Printf(" %+d", mods[0].Value)
+	fmt.Printf("%dd%d", d.Count, d.Faces)
+	if len(d.Modifiers) > 0 {
+		fmt.Printf(" %+d", d.Modifiers[0].Value)
 	}
 	fmt.Println()
 	// Output:
 	// 2d6 +3
 }
 
-// Example_diceNotation shows using dice notation shorthand.
 func Example_diceNotation() {
 	roller := d20.NewRoller(42)
 
-	result, _ := roller.Roll("1d20")
+	result, _ := roller.RollExpr("1d20")
 	fmt.Printf("1d20: %d\n", result.Value)
 
-	result, _ = roller.Roll("d20")
+	result, _ = roller.RollExpr("d20")
 	fmt.Printf("d20: %d\n", result.Value)
 
-	result, _ = roller.Roll("1d20+3")
+	result, _ = roller.RollExpr("1d20+3")
 	fmt.Printf("1d20+3: %d\n", result.Value)
 
-	result, _ = roller.Roll("2d6+2")
+	result, _ = roller.RollExpr("2d6+2")
 	fmt.Printf("2d6+2: %d\n", result.Value)
 
 	// Output:
@@ -68,25 +63,20 @@ func Example_diceNotation() {
 	// 2d6+2: 5
 }
 
-// Example_rollWithModifier shows adding a single modifier.
 func Example_rollWithModifier() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Dice(1, 20).
-		WithModifier("strength", 3).
-		Roll()
+	result, _ := roller.Roll(d20.NewDice(1, 20).WithModifier("strength", 3))
 
 	fmt.Printf("Roll: %d\n", result.Value)
 	// Output:
 	// Roll: 21
 }
 
-// Example_rollWithMultipleModifiers shows adding multiple modifiers, including a penalty.
 func Example_rollWithMultipleModifiers() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Dice(1, 20).
+	result, _ := roller.Roll(d20.NewDice(1, 20).
 		WithModifier("strength", 3).
-		WithModifier("cover", -2).
-		Roll()
+		WithModifier("cover", -2))
 
 	fmt.Printf("Roll: %d\n", result.Value)
 	fmt.Println(result.Detail())
@@ -95,42 +85,35 @@ func Example_rollWithMultipleModifiers() {
 	// Rolled 1d20... 18; +3 strength, -2 cover; *Result: 19*
 }
 
-// Example_rollWithAdvantage shows rolling with advantage.
 func Example_rollWithAdvantage() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Dice(1, 20).
-		WithAdvantage().
-		Roll()
+	result, _ := roller.Roll(d20.NewDice(1, 20).WithAdvantage())
 
 	fmt.Printf("Roll: %d, Dice: %v\n", result.Value, result.DiceRolls)
 	// Output:
 	// Roll: 20, Dice: [{20 18} {20 20}]
 }
 
-// Example_disadvantage shows rolling with disadvantage (2 dice, take lower).
 func Example_disadvantage() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Dice(1, 20).WithDisadvantage().Roll()
+	result, _ := roller.Roll(d20.NewDice(1, 20).WithDisadvantage())
 
 	fmt.Printf("Rolled: %d (from %v)\n", result.Value, result.DiceRolls)
 	// Output:
 	// Rolled: 18 (from [{20 18} {20 20}])
 }
 
-// Example_advantageWithModifier shows combining advantage with modifiers.
 func Example_advantageWithModifier() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Dice(1, 20).
+	result, _ := roller.Roll(d20.NewDice(1, 20).
 		WithAdvantage().
-		WithModifier("dexterity", 4).
-		Roll()
+		WithModifier("dexterity", 4))
 
 	fmt.Printf("Roll: %d\n", result.Value)
 	// Output:
 	// Roll: 24
 }
 
-// Example_newActor shows creating an actor and setting fields.
 func Example_newActor() {
 	actor := d20.NewActor("Aragorn")
 	actor.MaxHP, actor.HP = 45, 45
@@ -145,16 +128,15 @@ func Example_newActor() {
 	// AC: 18
 }
 
-// Example_actorSkillCheck shows making a skill check with a stored skill bonus.
-func Example_actorSkillCheck() {
+func Example_actorSkillDice() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Rogue")
 	actor.MaxHP, actor.HP = 30, 30
 	actor.AC = 15
 	actor.Attributes["athletics"] = 5
 
-	builder, _ := actor.SkillCheck("athletics", roller)
-	result, _ := builder.Roll()
+	d, _ := actor.SkillDice("athletics")
+	result, _ := roller.Roll(d)
 
 	fmt.Printf("Skill check: %d\n", result.Value)
 	fmt.Println(result.Detail())
@@ -163,8 +145,7 @@ func Example_actorSkillCheck() {
 	// Rolled 1d20... 18; +5 athletics; *Result: 23*
 }
 
-// Example_actorStrikeRoll shows making a strike roll.
-func Example_actorStrikeRoll() {
+func Example_actorStrikeDice() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Fighter")
 	actor.MaxHP, actor.HP = 45, 45
@@ -172,14 +153,13 @@ func Example_actorStrikeRoll() {
 	actor.Modifiers["strength"] = 4
 	actor.Modifiers["striking"] = 3
 
-	result, _ := actor.StrikeRoll(roller, "strength", "striking").Roll()
+	result, _ := roller.Roll(actor.StrikeDice("strength", "striking"))
 
 	fmt.Printf("Strike: %d\n", result.Value)
 	// Output:
 	// Strike: 25
 }
 
-// Example_hpManagement shows managing actor hit points.
 func Example_hpManagement() {
 	actor := d20.NewActor("Cleric")
 	actor.MaxHP, actor.HP = 38, 38
@@ -207,7 +187,6 @@ func Example_hpManagement() {
 	// After rest: 38/38
 }
 
-// Example_attributes shows managing actor attributes.
 func Example_attributes() {
 	actor := d20.NewActor("Wizard")
 	actor.MaxHP, actor.HP = 28, 28
@@ -233,8 +212,7 @@ func Example_attributes() {
 	// Wisdom debuffed: 12
 }
 
-// Example_strikeModifiers shows wiring modifiers and applying a subset on a strike.
-// Bless is on the DiceManager only; a new StrikeRoll does not keep it.
+// Bless is on the returned Dice only; StrikeDice itself is unchanged.
 func Example_strikeModifiers() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Paladin")
@@ -244,13 +222,14 @@ func Example_strikeModifiers() {
 	actor.Modifiers["striking"] = 3
 	actor.Modifiers["damage"] = 2
 
-	result, _ := actor.StrikeRoll(roller, "strength", "striking").Roll()
+	strike := actor.StrikeDice("strength", "striking")
+	result, _ := roller.Roll(strike)
 	fmt.Println(result.Detail())
 
-	result, _ = actor.StrikeRoll(roller, "strength", "striking").WithModifier("bless", 1).Roll()
+	result, _ = roller.Roll(strike.WithModifier("bless", 1))
 	fmt.Println(result.Detail())
 
-	result, _ = actor.StrikeRoll(roller, "strength", "striking").Roll()
+	result, _ = roller.Roll(strike)
 	fmt.Println(result.Detail())
 
 	// Output:
@@ -259,7 +238,6 @@ func Example_strikeModifiers() {
 	// Rolled 1d20... 3; +4 strength, +3 striking; *Result: 10*
 }
 
-// Example_idNormalization shows automatic ID normalization to snake_case.
 func Example_idNormalization() {
 	fmt.Println(d20.NewActor("Simple").ID)
 	fmt.Println(d20.NewActor("UPPERCASE").ID)
@@ -273,11 +251,10 @@ func Example_idNormalization() {
 	// goblin_3
 }
 
-// Example_rolledStats shows creating an actor with rolled stats.
 func Example_rolledStats() {
 	roller := d20.NewRoller(42)
-	hp, _ := roller.Roll("10d10+30")
-	str, _ := roller.Roll("3d6+1")
+	hp, _ := roller.RollExpr("10d10+30")
+	str, _ := roller.RollExpr("3d6+1")
 
 	actor := d20.NewActor("Conan")
 	actor.MaxHP, actor.HP = hp.Value, hp.Value
