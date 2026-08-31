@@ -3,7 +3,7 @@
 [![CI](https://github.com/jwebster45206/d20/actions/workflows/ci.yml/badge.svg)](https://github.com/jwebster45206/d20/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/jwebster45206/d20.svg)](https://pkg.go.dev/github.com/jwebster45206/d20)
 
-A Go library for dice rolling and tabletop RPG helpers: notation and fluent d20-style rolls, named modifiers, advantage/disadvantage, and a simple actor model. It is not a rules engine and does not implement SRD procedures such as ability modifiers or proficiency.
+A Go library for dice rolling and tabletop RPG helpers: dice notation, named modifiers, advantage/disadvantage, and a simple actor model. It is not a rules engine and does not implement SRD procedures such as ability modifiers or proficiency.
 
 ## Features
 
@@ -60,6 +60,14 @@ func NewRandomRoller() *Roller
 func (r *Roller) Roll(d Dice) (RollOutcome, error)
 func (r *Roller) RollPercentile(d Dice) (RollOutcome, error)
 func (r *Roller) RollExpr(notation string) (RollOutcome, error) // ParseDiceNotation + Roll
+
+var (
+    ErrNilRoller              error
+    ErrRollCountZero          error
+    ErrDieFacesZero           error
+    ErrInvalidAdvantage       error
+    ErrPercentileRequires2d10 error
+)
 ```
 
 ### Dice

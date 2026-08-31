@@ -56,21 +56,23 @@ func TestDice(t *testing.T) {
 
 func TestParseDiceNotation(t *testing.T) {
 	tests := []struct {
+		name     string
 		notation string
 		count    uint
 		faces    uint
 		mod      int // 0 means none
 		err      bool
 	}{
-		{"1d20", 1, 20, 0, false},
-		{"d20", 1, 20, 0, false},
-		{"2d6+3", 2, 6, 3, false},
-		{"3d8-2", 3, 8, -2, false},
-		{"not-dice", 0, 0, 0, true},
-		{"1d0", 0, 0, 0, true},
+		{"1d20", "1d20", 1, 20, 0, false},
+		{"d20", "d20", 1, 20, 0, false},
+		{"2d6+3", "2d6+3", 2, 6, 3, false},
+		{"3d8-2", "3d8-2", 3, 8, -2, false},
+		{"trim and lowercase", " 2D6+1 ", 2, 6, 1, false},
+		{"not-dice", "not-dice", 0, 0, 0, true},
+		{"1d0", "1d0", 0, 0, 0, true},
 	}
 	for _, tt := range tests {
-		t.Run(tt.notation, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			d, err := ParseDiceNotation(tt.notation)
 			if tt.err {
 				if !errors.Is(err, ErrInvalidDiceNotation) {

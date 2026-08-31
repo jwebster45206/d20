@@ -17,9 +17,9 @@ func TestRoller_Roll(t *testing.T) {
 		{"modifier", NewDice(1, 20).WithModifier("strength", 3), 21, 1, nil},
 		{"advantage", NewDice(1, 20).WithAdvantage(), 20, 2, nil},
 		{"disadvantage", NewDice(1, 20).WithDisadvantage(), 18, 2, nil},
-		{"zero count", NewDice(0, 20), 0, 0, errRollCountZero},
-		{"zero faces", NewDice(1, 0), 0, 0, errDieFacesZero},
-		{"bad advantage", Dice{Count: 1, Faces: 20, Advantage: 99}, 0, 0, errInvalidAdvantage},
+		{"zero count", NewDice(0, 20), 0, 0, ErrRollCountZero},
+		{"zero faces", NewDice(1, 0), 0, 0, ErrDieFacesZero},
+		{"bad advantage", Dice{Count: 1, Faces: 20, Advantage: 99}, 0, 0, ErrInvalidAdvantage},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -65,7 +65,7 @@ func TestRoller_RollPercentile(t *testing.T) {
 	}{
 		{"2d10", 42, NewDice(2, 10), 0, nil},
 		{"00 is 100", 169, NewDice(2, 10), 100, nil},
-		{"not 2d10", 42, NewDice(1, 20), 0, errPercentileRequires2d10},
+		{"not 2d10", 42, NewDice(1, 20), 0, ErrPercentileRequires2d10},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -123,6 +123,33 @@ func TestRoller_RollExpr(t *testing.T) {
 				t.Errorf("Value=%d n=%d, want %d n=%d", out.Value, len(out.DiceRolls), tt.want, tt.nDice)
 			}
 		})
+	}
+}
+
+func TestRoller_Nil(t *testing.T) {
+	var r *Roller
+	if _, err := r.Roll(NewDice(1, 20)); !errors.Is(err, ErrNilRoller) {
+		t.Fatalf("Roll err = %v, want ErrNilRoller", err)
+	}
+	if _, err := r.RollPercentile(NewDice(2, 10)); !errors.Is(err, ErrNilRoller) {
+		t.Fatalf("RollPercentile err = %v, want ErrNilRoller", err)
+	}
+}
+
+func TestRoller_Concurrent(t *testing.T) {
+	roller := NewRandomRoller()
+	const n = 50
+	errCh := make(chan error, n)
+	for range n {
+		go func() {
+			_, err := roller.Roll(NewDice(1, 20))
+			errCh <- err
+		}()
+	}
+	for range n {
+		if err := <-errCh; err != nil {
+			t.Errorf("Roll: %v", err)
+		}
 	}
 }
 

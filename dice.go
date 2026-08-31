@@ -6,11 +6,11 @@ import (
 )
 
 var (
-	errNilRoller              = errors.New("nil roller")
-	errRollCountZero          = errors.New("count must be greater than 0")
-	errDieFacesZero           = errors.New("faces must be greater than 0")
-	errInvalidAdvantage       = errors.New("invalid advantage type")
-	errPercentileRequires2d10 = errors.New("RollPercentile requires 2d10")
+	ErrNilRoller              = errors.New("nil roller")
+	ErrRollCountZero          = errors.New("count must be greater than 0")
+	ErrDieFacesZero           = errors.New("faces must be greater than 0")
+	ErrInvalidAdvantage       = errors.New("invalid advantage type")
+	ErrPercentileRequires2d10 = errors.New("RollPercentile requires 2d10")
 )
 
 // Dice is a roll configuration: count, faces, modifiers, and advantage.
@@ -49,6 +49,7 @@ func (d Dice) WithModifiers(modifiers map[string]int) Dice {
 // WithAdvantage returns a copy that rolls twice per die and uses the higher of each pair.
 // Ignored by RollPercentile. The original Dice is not mutated.
 func (d Dice) WithAdvantage() Dice {
+	d.Modifiers = slices.Clone(d.Modifiers)
 	d.Advantage = Advantage
 	return d
 }
@@ -56,6 +57,7 @@ func (d Dice) WithAdvantage() Dice {
 // WithDisadvantage returns a copy that rolls twice per die and uses the lower of each pair.
 // Ignored by RollPercentile. The original Dice is not mutated.
 func (d Dice) WithDisadvantage() Dice {
+	d.Modifiers = slices.Clone(d.Modifiers)
 	d.Advantage = Disadvantage
 	return d
 }
@@ -73,18 +75,18 @@ func modifierTotal(mods []Modifier) int {
 // disadvantage keeps the lower. All rolls appear in DiceRolls.
 func (r *Roller) Roll(d Dice) (RollOutcome, error) {
 	if r == nil {
-		return RollOutcome{}, errNilRoller
+		return RollOutcome{}, ErrNilRoller
 	}
 	if d.Count == 0 {
-		return RollOutcome{}, errRollCountZero
+		return RollOutcome{}, ErrRollCountZero
 	}
 	if d.Faces == 0 {
-		return RollOutcome{}, errDieFacesZero
+		return RollOutcome{}, ErrDieFacesZero
 	}
 	switch d.Advantage {
 	case Normal, Advantage, Disadvantage:
 	default:
-		return RollOutcome{}, errInvalidAdvantage
+		return RollOutcome{}, ErrInvalidAdvantage
 	}
 
 	r.mu.Lock()
@@ -135,10 +137,10 @@ func (r *Roller) Roll(d Dice) (RollOutcome, error) {
 // Value is the percentile (1–100) plus modifiers.
 func (r *Roller) RollPercentile(d Dice) (RollOutcome, error) {
 	if r == nil {
-		return RollOutcome{}, errNilRoller
+		return RollOutcome{}, ErrNilRoller
 	}
 	if d.Count != 2 || d.Faces != 10 {
-		return RollOutcome{}, errPercentileRequires2d10
+		return RollOutcome{}, ErrPercentileRequires2d10
 	}
 
 	r.mu.Lock()
