@@ -286,7 +286,11 @@ func TestActor_Rolls(t *testing.T) {
 					t.Fatalf("Roll: %v", err)
 				}
 			case "strike":
-				d := actor.StrikeDice(tt.strikeKeys...)
+				var d Dice
+				d, err = actor.StrikeDice(tt.strikeKeys...)
+				if err != nil {
+					t.Fatalf("StrikeDice: %v", err)
+				}
 				if tt.advantage {
 					d = d.WithAdvantage()
 				}
