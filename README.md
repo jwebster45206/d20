@@ -150,7 +150,7 @@ func (o RollOutcome) Detail() string
 
 ## Actor System
 
-Map keys are lowercase by convention. `SkillDice`, `StrikeDice`, and `D100SkillDice` lowercase the *query*; they do not rewrite stored keys. They return a `Dice` spec; the roller executes it.
+Map keys are lowercase by convention. `D20Dice` lowercases the *query*; it does not rewrite stored keys. It returns a `Dice` spec; the roller executes it.
 
 ```go
 type Actor struct {
@@ -165,14 +165,7 @@ type Actor struct {
 
 func NewActor(id string) *Actor
 
-func (a *Actor) AddHP(amount int)  // no-op if amount <= 0; will not exceed MaxHP
-func (a *Actor) SubHP(amount int)  // no-op if amount <= 0; will not go below 0
-func (a *Actor) ResetHP()
-func (a *Actor) IsKnockedOut() bool // HP <= 0
-
-func (a *Actor) SkillDice(skill string) (Dice, error)
-func (a *Actor) StrikeDice(keys ...string) (Dice, error)
-func (a *Actor) D100SkillDice(skill string) (Dice, error)
+func (a *Actor) D20Dice(keys ...string) (Dice, error)
 ```
 
 Well-known names live in `github.com/jwebster45206/d20/vocab`. Custom string keys are allowed.
@@ -188,8 +181,8 @@ wizard := d20.NewActor("Merlin")
 wizard.MaxHP, wizard.HP = 38, 38
 wizard.AC = 14
 wizard.Attributes = map[string]int{
-    "intelligence": 18, // ability score; SkillDice would add +18 if used as a skill
-    "athletics":    5,  // skill bonus used by SkillDice
+    "intelligence": 18,
+    "athletics":    5,
 }
 wizard.Modifiers = map[string]int{
     "intelligence": 4,
@@ -205,11 +198,11 @@ barbarian.AC = 14
 barbarian.Attributes["strength"] = str.Value
 ```
 
-`SkillDice` adds the stored attribute value to 1d20. The library does not derive 5e ability modifiers; store the bonus you want (`athletics: 5`, not `strength: 16`) unless you intend the raw score.
+HP, AC, and attributes are caller-owned fields. Mutate them directly.
 
 ### Modifiers and rolls
 
-`Modifiers` are not derived from `Attributes`. `StrikeDice` applies only the keys you pass; missing keys are skipped. Situational extras go on the returned `Dice`. `RollPercentile` ignores advantage/disadvantage.
+`Modifiers` are not derived from `Attributes`. `D20Dice` applies only the keys you pass; missing keys are skipped. Situational extras go on the returned `Dice`. `RollPercentile` ignores advantage/disadvantage.
 
 ```go
 import "github.com/jwebster45206/d20/vocab"
@@ -218,30 +211,13 @@ actor.Modifiers[vocab.Strength] = 4
 actor.Modifiers[vocab.Striking] = 3
 actor.Modifiers[vocab.Damage] = 1
 
-d, err := actor.StrikeDice(vocab.Strength, vocab.Striking)
+d, err := actor.D20Dice(vocab.Strength, vocab.Striking)
 result, _ := roller.Roll(d)
 result, _ = roller.Roll(d.WithModifier("bless", 1))
-
-d, err := actor.SkillDice("athletics")
-if err != nil {
-    // skill not found
-}
 result, _ = roller.Roll(d.WithAdvantage())
-
-d100, err := actor.D100SkillDice("stealth")
-outcome, _ := roller.RollPercentile(d100)
-success := outcome.Value <= actor.Attributes["stealth"]
 ```
 
-`vocab.Damage` is for damage rolls you build yourself (`d, err := NewDice(1, 8)` then `d.WithModifier(vocab.Damage, actor.Modifiers[vocab.Damage])`). `StrikeDice` never auto-includes it.
+`vocab.Damage` is for damage rolls you build yourself (`d, err := NewDice(1, 8)` then `d.WithModifier(vocab.Damage, actor.Modifiers[vocab.Damage])`). `D20Dice` never auto-includes it.
 
-## Game systems
 
-Helpers cover common 5e-style rolls (polyhedral dice, d20 + named modifiers, advantage/disadvantage, HP/AC). Callers supply ability modifiers and proficiency. The [5e SRD](https://dnd.wizards.com/resources/systems-reference-document) is published by Wizards of the Coast under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). This repository does not include SRD text.
-
-`RollPercentile` of 2d10 (`NewDice(2, 10)`) and `D100SkillDice` implement compatible d100 roll-under mechanics (tens + ones, `00` = 100). They are not a Call of Cthulhu rules implementation. Call of Cthulhu® is a registered trademark of Chaosium Inc.
-
-## References
-
-- [D&D 5th Edition System Reference Document](https://dnd.wizards.com/resources/systems-reference-document)
-- [5e SRD CC-BY License](https://creativecommons.org/licenses/by/4.0/)
+`RollPercentile` of 2d10 (`NewDice(2, 10)`) implements compatible d100 roll-under mechanics (tens + ones, `00` = 100). 
