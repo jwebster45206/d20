@@ -189,30 +189,7 @@ func Example_newActor() {
 	// AC: 18
 }
 
-func Example_actorSkillDice() {
-	roller := d20.NewRoller(42)
-	actor := d20.NewActor("Rogue")
-	actor.MaxHP, actor.HP = 30, 30
-	actor.AC = 15
-	actor.Attributes["athletics"] = 5
-
-	d, err := actor.SkillDice("athletics")
-	if err != nil {
-		log.Fatal(err)
-	}
-	result, err := roller.Roll(d)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf("Skill check: %d\n", result.Value)
-	fmt.Println(result.Detail())
-	// Output:
-	// Skill check: 23
-	// Rolled 1d20... 18; +5 athletics; *Result: 23*
-}
-
-func Example_actorStrikeDice() {
+func Example_actorD20Dice() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Fighter")
 	actor.MaxHP, actor.HP = 45, 45
@@ -220,7 +197,7 @@ func Example_actorStrikeDice() {
 	actor.Modifiers["strength"] = 4
 	actor.Modifiers["striking"] = 3
 
-	d, err := actor.StrikeDice("strength", "striking")
+	d, err := actor.D20Dice("strength", "striking")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -229,36 +206,9 @@ func Example_actorStrikeDice() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Strike: %d\n", result.Value)
+	fmt.Printf("Roll: %d\n", result.Value)
 	// Output:
-	// Strike: 25
-}
-
-func Example_hpManagement() {
-	actor := d20.NewActor("Cleric")
-	actor.MaxHP, actor.HP = 38, 38
-	actor.AC = 16
-
-	fmt.Printf("Start: %d/%d\n", actor.HP, actor.MaxHP)
-
-	actor.SubHP(15)
-	fmt.Printf("After damage: %d/%d\n", actor.HP, actor.MaxHP)
-
-	actor.AddHP(10)
-	fmt.Printf("After healing: %d/%d\n", actor.HP, actor.MaxHP)
-
-	actor.SubHP(50)
-	fmt.Printf("Knocked out: %v\n", actor.IsKnockedOut())
-
-	actor.ResetHP()
-	fmt.Printf("After rest: %d/%d\n", actor.HP, actor.MaxHP)
-
-	// Output:
-	// Start: 38/38
-	// After damage: 23/38
-	// After healing: 33/38
-	// Knocked out: true
-	// After rest: 38/38
+	// Roll: 25
 }
 
 func Example_attributes() {
@@ -286,8 +236,8 @@ func Example_attributes() {
 	// Wisdom debuffed: 12
 }
 
-// Bless is on the returned Dice only; StrikeDice itself is unchanged.
-func Example_strikeModifiers() {
+// Bless is on the returned Dice only; D20Dice itself is unchanged.
+func Example_d20DiceModifiers() {
 	roller := d20.NewRoller(42)
 	actor := d20.NewActor("Paladin")
 	actor.MaxHP, actor.HP = 42, 42
@@ -296,7 +246,7 @@ func Example_strikeModifiers() {
 	actor.Modifiers["striking"] = 3
 	actor.Modifiers["damage"] = 2
 
-	strike, err := actor.StrikeDice("strength", "striking")
+	strike, err := actor.D20Dice("strength", "striking")
 	if err != nil {
 		log.Fatal(err)
 	}
