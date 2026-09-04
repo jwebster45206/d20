@@ -100,34 +100,42 @@ func (a *Actor) SkillDice(skill string) (Dice, error) {
 	if !exists {
 		return Dice{}, fmt.Errorf("skill %q not found in actor attributes", skill)
 	}
-	return NewDice(1, 20).WithModifier(skill, skillValue), nil
+	d, err := NewDice(1, 20)
+	if err != nil {
+		return Dice{}, err
+	}
+	return d.WithModifier(skill, skillValue), nil
 }
 
 // StrikeDice returns 1d20 with the named modifier keys applied.
 // Missing keys are skipped. Key names are lowercased for lookup.
 // Situational extras go on the returned Dice (WithModifier) without mutating this spec.
 //
-//	out, _ := roller.Roll(actor.StrikeDice("strength", "striking").WithAdvantage())
-func (a *Actor) StrikeDice(keys ...string) Dice {
-	d := NewDice(1, 20)
+//	d, err := actor.StrikeDice("strength", "striking")
+//	out, err := roller.Roll(d.WithAdvantage())
+func (a *Actor) StrikeDice(keys ...string) (Dice, error) {
+	d, err := NewDice(1, 20)
+	if err != nil {
+		return Dice{}, err
+	}
 	for _, name := range keys {
 		name = strings.ToLower(name)
 		if v, ok := a.Modifiers[name]; ok {
 			d = d.WithModifier(name, v)
 		}
 	}
-	return d
+	return d, nil
 }
 
 // D100SkillDice returns 2d10 for a roll-under skill check.
 // Errors if the skill is missing. Compare outcome.Value to Attributes[skill] for success.
 //
-//	d, _ := actor.D100SkillDice("stealth")
-//	out, _ := roller.RollPercentile(d)
+//	d, err := actor.D100SkillDice("stealth")
+//	out, err := roller.RollPercentile(d)
 func (a *Actor) D100SkillDice(skill string) (Dice, error) {
 	skill = strings.ToLower(skill)
 	if _, exists := a.Attributes[skill]; !exists {
 		return Dice{}, fmt.Errorf("skill %q not found in actor attributes", skill)
 	}
-	return NewDice(2, 10), nil
+	return NewDice(2, 10)
 }

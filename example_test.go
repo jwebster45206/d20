@@ -2,13 +2,21 @@ package d20_test
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/jwebster45206/d20"
 )
 
 func Example_basicRoll() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Roll(d20.NewDice(1, 20))
+	d, err := d20.NewDice(1, 20)
+	if err != nil {
+		log.Fatal(err)
+	}
+	result, err := roller.Roll(d)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Printf("Rolled: %d\n", result.Value)
 	// Output:
@@ -17,8 +25,14 @@ func Example_basicRoll() {
 
 func Example_diceExpr() {
 	roller := d20.NewRoller(42)
-	d, _ := d20.ParseDiceNotation("2d6+3")
-	result, _ := roller.Roll(d.WithModifier("strength", 2))
+	d, err := d20.DiceFromExpr("2d6+3")
+	if err != nil {
+		log.Fatal(err)
+	}
+	result, err := roller.Roll(d.WithModifier("strength", 2))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Printf("Roll: %d\n", result.Value)
 	fmt.Println(result.Detail())
@@ -28,9 +42,9 @@ func Example_diceExpr() {
 }
 
 func Example_parseDiceNotation() {
-	d, err := d20.ParseDiceNotation("2d6+3")
+	d, err := d20.DiceFromExpr("2d6+3")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	fmt.Printf("%dd%d", d.Count, d.Faces)
 	if len(d.Modifiers) > 0 {
@@ -44,16 +58,28 @@ func Example_parseDiceNotation() {
 func Example_diceNotation() {
 	roller := d20.NewRoller(42)
 
-	result, _ := roller.RollExpr("1d20")
+	result, err := roller.RollExpr("1d20")
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("1d20: %d\n", result.Value)
 
-	result, _ = roller.RollExpr("d20")
+	result, err = roller.RollExpr("d20")
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("d20: %d\n", result.Value)
 
-	result, _ = roller.RollExpr("1d20+3")
+	result, err = roller.RollExpr("1d20+3")
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("1d20+3: %d\n", result.Value)
 
-	result, _ = roller.RollExpr("2d6+2")
+	result, err = roller.RollExpr("2d6+2")
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("2d6+2: %d\n", result.Value)
 
 	// Output:
@@ -65,7 +91,14 @@ func Example_diceNotation() {
 
 func Example_rollWithModifier() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Roll(d20.NewDice(1, 20).WithModifier("strength", 3))
+	d, err := d20.NewDice(1, 20)
+	if err != nil {
+		log.Fatal(err)
+	}
+	result, err := roller.Roll(d.WithModifier("strength", 3))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Printf("Roll: %d\n", result.Value)
 	// Output:
@@ -74,9 +107,16 @@ func Example_rollWithModifier() {
 
 func Example_rollWithMultipleModifiers() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Roll(d20.NewDice(1, 20).
+	d, err := d20.NewDice(1, 20)
+	if err != nil {
+		log.Fatal(err)
+	}
+	result, err := roller.Roll(d.
 		WithModifier("strength", 3).
 		WithModifier("cover", -2))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Printf("Roll: %d\n", result.Value)
 	fmt.Println(result.Detail())
@@ -87,7 +127,14 @@ func Example_rollWithMultipleModifiers() {
 
 func Example_rollWithAdvantage() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Roll(d20.NewDice(1, 20).WithAdvantage())
+	d, err := d20.NewDice(1, 20)
+	if err != nil {
+		log.Fatal(err)
+	}
+	result, err := roller.Roll(d.WithAdvantage())
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Printf("Roll: %d, Dice: %v\n", result.Value, result.DiceRolls)
 	// Output:
@@ -96,7 +143,14 @@ func Example_rollWithAdvantage() {
 
 func Example_disadvantage() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Roll(d20.NewDice(1, 20).WithDisadvantage())
+	d, err := d20.NewDice(1, 20)
+	if err != nil {
+		log.Fatal(err)
+	}
+	result, err := roller.Roll(d.WithDisadvantage())
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Printf("Rolled: %d (from %v)\n", result.Value, result.DiceRolls)
 	// Output:
@@ -105,9 +159,16 @@ func Example_disadvantage() {
 
 func Example_advantageWithModifier() {
 	roller := d20.NewRoller(42)
-	result, _ := roller.Roll(d20.NewDice(1, 20).
+	d, err := d20.NewDice(1, 20)
+	if err != nil {
+		log.Fatal(err)
+	}
+	result, err := roller.Roll(d.
 		WithAdvantage().
 		WithModifier("dexterity", 4))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Printf("Roll: %d\n", result.Value)
 	// Output:
@@ -135,8 +196,14 @@ func Example_actorSkillDice() {
 	actor.AC = 15
 	actor.Attributes["athletics"] = 5
 
-	d, _ := actor.SkillDice("athletics")
-	result, _ := roller.Roll(d)
+	d, err := actor.SkillDice("athletics")
+	if err != nil {
+		log.Fatal(err)
+	}
+	result, err := roller.Roll(d)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Printf("Skill check: %d\n", result.Value)
 	fmt.Println(result.Detail())
@@ -153,7 +220,14 @@ func Example_actorStrikeDice() {
 	actor.Modifiers["strength"] = 4
 	actor.Modifiers["striking"] = 3
 
-	result, _ := roller.Roll(actor.StrikeDice("strength", "striking"))
+	d, err := actor.StrikeDice("strength", "striking")
+	if err != nil {
+		log.Fatal(err)
+	}
+	result, err := roller.Roll(d)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Printf("Strike: %d\n", result.Value)
 	// Output:
@@ -222,14 +296,26 @@ func Example_strikeModifiers() {
 	actor.Modifiers["striking"] = 3
 	actor.Modifiers["damage"] = 2
 
-	strike := actor.StrikeDice("strength", "striking")
-	result, _ := roller.Roll(strike)
+	strike, err := actor.StrikeDice("strength", "striking")
+	if err != nil {
+		log.Fatal(err)
+	}
+	result, err := roller.Roll(strike)
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Println(result.Detail())
 
-	result, _ = roller.Roll(strike.WithModifier("bless", 1))
+	result, err = roller.Roll(strike.WithModifier("bless", 1))
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Println(result.Detail())
 
-	result, _ = roller.Roll(strike)
+	result, err = roller.Roll(strike)
+	if err != nil {
+		log.Fatal(err)
+	}
 	fmt.Println(result.Detail())
 
 	// Output:
@@ -253,8 +339,14 @@ func Example_idNormalization() {
 
 func Example_rolledStats() {
 	roller := d20.NewRoller(42)
-	hp, _ := roller.RollExpr("10d10+30")
-	str, _ := roller.RollExpr("3d6+1")
+	hp, err := roller.RollExpr("10d10+30")
+	if err != nil {
+		log.Fatal(err)
+	}
+	str, err := roller.RollExpr("3d6+1")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	actor := d20.NewActor("Conan")
 	actor.MaxHP, actor.HP = hp.Value, hp.Value

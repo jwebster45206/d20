@@ -19,6 +19,8 @@ package main
 
 import (
     "fmt"
+    "log"
+
     "github.com/jwebster45206/d20"
 )
 
@@ -28,20 +30,28 @@ func main() {
     result, _ := roller.RollExpr("1d20+3")
     fmt.Printf("Attack roll: %d\n", result.Value)
 
-    result, err := roller.Roll(d20.NewDice(1, 20).
+    d, err := d20.NewDice(1, 20)
+    if err != nil {
+        log.Fatal(err)
+    }
+    result, err = roller.Roll(d.
         WithModifier("strength", 3).
         WithModifier("proficiency", 2))
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
     fmt.Println(result.Detail())
     // Example: "Rolled 1d20... 15; +3 strength, +2 proficiency; *Result: 20*"
 
-    r, err := roller.Roll(d20.NewDice(1, 20).
+    d, err = d20.NewDice(1, 20)
+    if err != nil {
+        log.Fatal(err)
+    }
+    r, err := roller.Roll(d.
         WithAdvantage().
         WithModifier("dexterity", 4))
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
     fmt.Printf("Roll: %d (dice: %v)\n", r.Value, r.DiceRolls)
 }
@@ -59,7 +69,7 @@ func NewRandomRoller() *Roller
 
 func (r *Roller) Roll(d Dice) (RollOutcome, error)
 func (r *Roller) RollPercentile(d Dice) (RollOutcome, error)
-func (r *Roller) RollExpr(notation string) (RollOutcome, error) // ParseDiceNotation + Roll
+func (r *Roller) RollExpr(notation string) (RollOutcome, error) // DiceFromExpr + Roll
 
 var (
     ErrNilRoller              error
@@ -82,7 +92,7 @@ type Dice struct {
     Advantage AdvantageType
 }
 
-func NewDice(count, faces uint) Dice
+func NewDice(count, faces uint) (Dice, error)
 
 func (d Dice) WithModifier(name string, value int) Dice
 func (d Dice) WithModifiers(modifiers map[string]int) Dice
@@ -91,19 +101,20 @@ func (d Dice) WithDisadvantage() Dice
 ```
 
 ```go
-attack := d20.NewDice(1, 20).WithModifier("strength", 4)
+attack, err := d20.NewDice(1, 20)
+attack = attack.WithModifier("strength", 4)
 roller.Roll(attack)
 roller.Roll(attack.WithAdvantage()) // attack unchanged
 ```
 
 Advantage (ignored by `RollPercentile`): rolls twice per die, uses the higher of each pair; disadvantage uses the lower. All rolls appear in `DiceRolls`.
 
-`RollPercentile` is tens+ones (`00` = 100), distinct from `Roll(NewDice(1, 100))`. Requires 2d10.
+`RollPercentile` is tens+ones (`00` = 100), distinct from rolling a uniform 1d100. Requires 2d10.
 
 ### Dice notation
 
 ```go
-func ParseDiceNotation(notation string) (Dice, error)
+func DiceFromExpr(expr string) (Dice, error)
 
 var ErrInvalidDiceNotation error
 ```
@@ -111,7 +122,7 @@ var ErrInvalidDiceNotation error
 Accepted: `"1d20"`, `"d20"`, `"2d6+3"`, `"3d8-2"`. `"1d100"` is a uniform 1–100 die. A trailing `+N`/`-N` becomes a modifier named `"modifier"`. Invalid notation fails immediately.
 
 ```go
-d, err := d20.ParseDiceNotation("2d6+3")
+d, err := d20.DiceFromExpr("2d6+3")
 out, err := roller.Roll(d.WithModifier("bless", 1))
 out, err = roller.RollExpr("2d6+3")
 ```
@@ -160,7 +171,7 @@ func (a *Actor) ResetHP()
 func (a *Actor) IsKnockedOut() bool // HP <= 0
 
 func (a *Actor) SkillDice(skill string) (Dice, error)
-func (a *Actor) StrikeDice(keys ...string) Dice
+func (a *Actor) StrikeDice(keys ...string) (Dice, error)
 func (a *Actor) D100SkillDice(skill string) (Dice, error)
 ```
 
@@ -207,8 +218,9 @@ actor.Modifiers[vocab.Strength] = 4
 actor.Modifiers[vocab.Striking] = 3
 actor.Modifiers[vocab.Damage] = 1
 
-result, _ := roller.Roll(actor.StrikeDice(vocab.Strength, vocab.Striking))
-result, _ = roller.Roll(actor.StrikeDice(vocab.Strength, vocab.Striking).WithModifier("bless", 1))
+d, err := actor.StrikeDice(vocab.Strength, vocab.Striking)
+result, _ := roller.Roll(d)
+result, _ = roller.Roll(d.WithModifier("bless", 1))
 
 d, err := actor.SkillDice("athletics")
 if err != nil {
@@ -221,13 +233,13 @@ outcome, _ := roller.RollPercentile(d100)
 success := outcome.Value <= actor.Attributes["stealth"]
 ```
 
-`vocab.Damage` is for damage rolls you build yourself (`NewDice(1, 8).WithModifier(vocab.Damage, actor.Modifiers[vocab.Damage])`). `StrikeDice` never auto-includes it.
+`vocab.Damage` is for damage rolls you build yourself (`d, err := NewDice(1, 8)` then `d.WithModifier(vocab.Damage, actor.Modifiers[vocab.Damage])`). `StrikeDice` never auto-includes it.
 
 ## Game systems
 
 Helpers cover common 5e-style rolls (polyhedral dice, d20 + named modifiers, advantage/disadvantage, HP/AC). Callers supply ability modifiers and proficiency. The [5e SRD](https://dnd.wizards.com/resources/systems-reference-document) is published by Wizards of the Coast under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). This repository does not include SRD text.
 
-`RollPercentile(NewDice(2, 10))` and `D100SkillDice` implement compatible d100 roll-under mechanics (tens + ones, `00` = 100). They are not a Call of Cthulhu rules implementation. Call of Cthulhu® is a registered trademark of Chaosium Inc.
+`RollPercentile` of 2d10 (`NewDice(2, 10)`) and `D100SkillDice` implement compatible d100 roll-under mechanics (tens + ones, `00` = 100). They are not a Call of Cthulhu rules implementation. Call of Cthulhu® is a registered trademark of Chaosium Inc.
 
 ## References
 
