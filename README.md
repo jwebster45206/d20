@@ -165,6 +165,8 @@ type Actor struct {
 
 func NewActor(id string) *Actor
 
+func (a *Actor) Normalize() error
+
 func (a *Actor) D20Dice(keys ...string) (Dice, error)
 ```
 
