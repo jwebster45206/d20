@@ -141,6 +141,55 @@ func TestActor_Normalize(t *testing.T) {
 	}
 }
 
+func TestActor_Normalize_actions(t *testing.T) {
+	t.Run("copies key onto id and type", func(t *testing.T) {
+		a := Actor{Actions: map[string]Action{
+			"Dagger Strike": {Type: "Attack", Name: "Dagger Strike"},
+		}}
+		if err := a.Normalize(); err != nil {
+			t.Fatal(err)
+		}
+		act, ok := a.Actions["dagger_strike"]
+		if !ok {
+			t.Fatalf("Actions = %v, want dagger_strike", a.Actions)
+		}
+		if act.ID != "dagger_strike" || act.Type != "attack" || act.Name != "Dagger Strike" {
+			t.Errorf("got %+v", act)
+		}
+	})
+	t.Run("duplicate keys", func(t *testing.T) {
+		orig := map[string]Action{"Foo Bar": {Name: "a"}, "foo-bar": {Name: "b"}}
+		a := Actor{Actions: orig}
+		err := a.Normalize()
+		if !errors.Is(err, ErrDuplicateKey) {
+			t.Fatalf("err = %v, want ErrDuplicateKey", err)
+		}
+		if a.Actions["Foo Bar"].Name != "a" || a.Actions["foo-bar"].Name != "b" {
+			t.Errorf("Actions mutated on error: %+v", a.Actions)
+		}
+	})
+	t.Run("empty key", func(t *testing.T) {
+		a := Actor{Actions: map[string]Action{"": {Name: "x"}}}
+		err := a.Normalize()
+		if !errors.Is(err, ErrEmptyActionID) {
+			t.Fatalf("err = %v, want ErrEmptyActionID", err)
+		}
+	})
+}
+
+func TestActor_Action(t *testing.T) {
+	a := Actor{Actions: map[string]Action{
+		"dagger_attack": {ID: "dagger_attack", Name: "Dagger Strike"},
+	}}
+	act, ok := a.Action("Dagger Attack")
+	if !ok || act.Name != "Dagger Strike" {
+		t.Fatalf("Action = %+v, ok=%v", act, ok)
+	}
+	if _, ok := a.Action("missing"); ok {
+		t.Fatal("missing action found")
+	}
+}
+
 func TestActor_NewActor(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -163,6 +212,9 @@ func TestActor_NewActor(t *testing.T) {
 			}
 			if actor.Modifiers == nil {
 				t.Error("Modifiers map is nil")
+			}
+			if actor.Actions == nil {
+				t.Error("Actions map is nil")
 			}
 		})
 	}

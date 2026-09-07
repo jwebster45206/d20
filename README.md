@@ -9,7 +9,7 @@ A Go library for dice rolling and tabletop RPG helpers: dice notation, named mod
 
 - **Dice notation**: `"1d20+3"`, `"2d6"`, `"d20"`
 - **Dice config**: named modifiers and advantage/disadvantage
-- **Actors**: HP/AC plus caller-owned attributes and modifiers
+- **Actors**: HP/AC, name, and caller-owned attributes, modifiers, and actions
 - **RollOutcome.Detail()**: Bioware-style breakdown of dice and modifiers
 
 ## Quick Start
@@ -152,18 +152,31 @@ Map keys are lowercase by convention. `D20Dice` and `Dice` lowercase the *query*
 ```go
 type Actor struct {
     ID         string
+    Name       string
+    Alignment  string
     MaxHP      int
     HP         int
     AC         int
-    Initiative int
     Attributes map[string]int // caller-owned numbers (scores or skill bonuses)
     Modifiers  map[string]int // caller-wired roll bonuses
+    Actions    map[string]Action
+}
+
+type Action struct {
+    ID      string
+    Name    string
+    Type    string
+    Attempt Dice
+    Effect  Dice
+    Charges *uint // nil means unlimited
 }
 
 func NewActor(id string) *Actor
 
 func (a *Actor) Normalize() error
+func (a *Action) Normalize()
 
+func (a *Actor) Action(id string) (Action, bool)
 func (a *Actor) Dice(d Dice, keys ...string) Dice
 func (a *Actor) D20Dice(keys ...string) Dice
 func (a *Actor) DiceFromExpr(expr string, keys ...string) (Dice, error)
@@ -199,7 +212,7 @@ barbarian.AC = 14
 barbarian.Attributes["strength"] = str.Value
 ```
 
-HP, AC, and attributes are caller-owned fields. Mutate them directly.
+HP, AC, name, alignment, attributes, and actions are caller-owned fields. Mutate them directly. `Normalize` rewrites actor ID and map keys to lowercase snake_case, and copies each action map key onto `Action.ID`.
 
 ### Modifiers and rolls
 
