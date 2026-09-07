@@ -67,12 +67,12 @@ func normalizeActionSlice(a []Action) error {
 //	fmt.Println(fighter.ID) // "ironpants_son_of_arathorn"
 type Actor struct {
 	ID         string         // Unique identifier (normalized by NewActor and Normalize)
-	Name       string         // Human-readable name
 	MaxHP      int            // Maximum Hit Points
 	HP         int            // Current Hit Points
 	AC         int            // Armor Class
-	Attributes map[string]int // Caller-owned numbers (ability scores or skill bonuses). Keys are lowercase snake_case after Normalize.
-	Modifiers  map[string]int // Caller-wired roll bonuses; not derived from Attributes. Keys are lowercase snake_case after Normalize.
+	Initiative int            // Initiative order (situational)
+	Attributes map[string]int // Caller-owned numbers (ability scores or skill bonuses)
+	Modifiers  map[string]int // Caller-wired roll bonuses; not derived from Attributes
 	Actions    []Action       // List of actions the actor can perform
 }
 
@@ -98,7 +98,10 @@ func (a *Actor) Normalize() error {
 	if err != nil {
 		return err
 	}
-
+	err = normalizeActionSlice(a.Actions)
+	if err != nil {
+		return err
+	}
 	a.ID = id
 	a.Attributes = attrs
 	a.Modifiers = mods
@@ -112,35 +115,9 @@ func (a *Actor) Normalize() error {
 // Missing keys are skipped. Key names are normalized for lookup.
 // Situational extras go on the returned Dice (WithModifier) without mutating this spec.
 //
-//	d, err := actor.D20Dice("strength", "striking")
-//	out, err := roller.Roll(d.WithAdvantage())
-func (a *Actor) D20Dice(keys ...string) (Dice, error) {
-	return a.NewDice(1, 20, keys...)
-}
-
-// NewDice creates a new Dice with the given number of dice and sides
-// and the named modifier keys applied. Missing keys are skipped.
-func (a *Actor) NewDice(numDice uint, sides uint, keys ...string) (Dice, error) {
-	d, err := NewDice(numDice, sides)
-	if err != nil {
-		return Dice{}, err
-	}
-	for _, name := range keys {
-		name = normalizeID(name)
-		if v, ok := a.Modifiers[name]; ok {
-			d = d.WithModifier(name, v)
-		}
-	}
-	return d, nil
-}
-
-// DiceFromExpr creates a new Dice from a string expression
-// and the named modifier keys applied. Missing keys are skipped.
-func (a *Actor) DiceFromExpr(expr string, keys ...string) (Dice, error) {
-	d, err := DiceFromExpr(expr)
-	if err != nil {
-		return Dice{}, err
-	}
+//	d := actor.Dice(d20.MustDiceFromExpr("1d6"), "damage", "strength")
+//	out, err := roller.Roll(d)
+func (a *Actor) Dice(d Dice, keys ...string) Dice {
 	for _, name := range keys {
 		name = normalizeID(name)
 		if v, ok := a.Modifiers[name]; ok {
