@@ -5,14 +5,6 @@ import (
 	"testing"
 )
 
-func mustDice(count, faces uint) Dice {
-	d, err := NewDice(count, faces)
-	if err != nil {
-		panic(err)
-	}
-	return d
-}
-
 func TestNewDice(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -46,23 +38,23 @@ func TestNewDice(t *testing.T) {
 }
 
 func TestDice(t *testing.T) {
-	orig := mustDice(1, 20).WithModifier("strength", 4)
+	orig := MustNewDice(1, 20).WithModifier("strength", 4)
 	tests := []struct {
 		name string
 		got  Dice
 		want Dice
 	}{
-		{"new", mustDice(2, 6), Dice{Count: 2, Faces: 6}},
+		{"new", MustNewDice(2, 6), Dice{Count: 2, Faces: 6}},
 		{
 			"modifiers",
-			mustDice(1, 20).WithModifier("Strength", 3).WithModifier("cover", -2),
+			MustNewDice(1, 20).WithModifier("Strength", 3).WithModifier("cover", -2),
 			Dice{Count: 1, Faces: 20, Modifiers: []Modifier{
 				{Reason: "strength", Value: 3},
 				{Reason: "cover", Value: -2},
 			}},
 		},
-		{"advantage", mustDice(1, 20).WithAdvantage(), Dice{Count: 1, Faces: 20, Advantage: Advantage}},
-		{"disadvantage", mustDice(1, 20).WithDisadvantage(), Dice{Count: 1, Faces: 20, Advantage: Disadvantage}},
+		{"advantage", MustNewDice(1, 20).WithAdvantage(), Dice{Count: 1, Faces: 20, Advantage: Advantage}},
+		{"disadvantage", MustNewDice(1, 20).WithDisadvantage(), Dice{Count: 1, Faces: 20, Advantage: Disadvantage}},
 		{
 			"copy does not mutate original",
 			orig,
@@ -137,4 +129,67 @@ func TestDiceFromExpr(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMustNewDice(t *testing.T) {
+	d := MustNewDice(2, 6)
+	if d.Count != 2 || d.Faces != 6 {
+		t.Errorf("got %dd%d, want 2d6", d.Count, d.Faces)
+	}
+}
+
+func TestMustNewDice_panics(t *testing.T) {
+	tests := []struct {
+		name         string
+		count, faces uint
+		errIs        error
+	}{
+		{"zero count", 0, 20, ErrRollCountZero},
+		{"zero faces", 1, 0, ErrDieFacesZero},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				got := recover()
+				if got == nil {
+					t.Fatal("expected panic")
+				}
+				err, ok := got.(error)
+				if !ok {
+					t.Fatalf("panic %v (%T), want error", got, got)
+				}
+				if !errors.Is(err, tt.errIs) {
+					t.Fatalf("panic %v, want %v", err, tt.errIs)
+				}
+			}()
+			MustNewDice(tt.count, tt.faces)
+		})
+	}
+}
+
+func TestMustDiceFromExpr(t *testing.T) {
+	d := MustDiceFromExpr("2d6+3")
+	if d.Count != 2 || d.Faces != 6 {
+		t.Errorf("got %dd%d, want 2d6", d.Count, d.Faces)
+	}
+	if len(d.Modifiers) != 1 || d.Modifiers[0].Reason != "modifier" || d.Modifiers[0].Value != 3 {
+		t.Errorf("Modifiers = %v, want modifier +3", d.Modifiers)
+	}
+}
+
+func TestMustDiceFromExpr_panics(t *testing.T) {
+	defer func() {
+		got := recover()
+		if got == nil {
+			t.Fatal("expected panic")
+		}
+		err, ok := got.(error)
+		if !ok {
+			t.Fatalf("panic %v (%T), want error", got, got)
+		}
+		if !errors.Is(err, ErrInvalidDiceNotation) {
+			t.Fatalf("panic %v, want ErrInvalidDiceNotation", err)
+		}
+	}()
+	MustDiceFromExpr("not-dice")
 }

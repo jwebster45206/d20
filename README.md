@@ -30,11 +30,8 @@ func main() {
     result, _ := roller.RollExpr("1d20+3")
     fmt.Printf("Attack roll: %d\n", result.Value)
 
-    d, err := d20.NewDice(1, 20)
-    if err != nil {
-        log.Fatal(err)
-    }
-    result, err = roller.Roll(d.
+    d := d20.MustNewDice(1, 20)
+    result, err := roller.Roll(d.
         WithModifier("strength", 3).
         WithModifier("proficiency", 2))
     if err != nil {
@@ -43,10 +40,7 @@ func main() {
     fmt.Println(result.Detail())
     // Example: "Rolled 1d20... 15; +3 strength, +2 proficiency; *Result: 20*"
 
-    d, err = d20.NewDice(1, 20)
-    if err != nil {
-        log.Fatal(err)
-    }
+    d = d20.MustNewDice(1, 20)
     r, err := roller.Roll(d.
         WithAdvantage().
         WithModifier("dexterity", 4))
@@ -93,6 +87,7 @@ type Dice struct {
 }
 
 func NewDice(count, faces uint) (Dice, error)
+func MustNewDice(count, faces uint) Dice
 
 func (d Dice) WithModifier(name string, value int) Dice
 func (d Dice) WithModifiers(modifiers map[string]int) Dice
@@ -101,7 +96,7 @@ func (d Dice) WithDisadvantage() Dice
 ```
 
 ```go
-attack, err := d20.NewDice(1, 20)
+attack := d20.MustNewDice(1, 20)
 attack = attack.WithModifier("strength", 4)
 roller.Roll(attack)
 roller.Roll(attack.WithAdvantage()) // attack unchanged
@@ -115,16 +110,18 @@ Advantage (ignored by `RollPercentile`): rolls twice per die, uses the higher of
 
 ```go
 func DiceFromExpr(expr string) (Dice, error)
+func MustDiceFromExpr(expr string) Dice
 
 var ErrInvalidDiceNotation error
 ```
 
-Accepted: `"1d20"`, `"d20"`, `"2d6+3"`, `"3d8-2"`. `"1d100"` is a uniform 1–100 die. A trailing `+N`/`-N` becomes a modifier named `"modifier"`. Invalid notation fails immediately.
+Accepted: `"1d20"`, `"d20"`, `"2d6+3"`, `"3d8-2"`. `"1d100"` is a uniform 1–100 die. A trailing `+N`/`-N` becomes a modifier named `"modifier"`. Invalid notation fails immediately. `MustDiceFromExpr` panics on invalid notation; use it for known-good literals.
 
 ```go
-d, err := d20.DiceFromExpr("2d6+3")
+d := d20.MustDiceFromExpr("2d6+3")
 out, err := roller.Roll(d.WithModifier("bless", 1))
 out, err = roller.RollExpr("2d6+3")
+d, err = d20.DiceFromExpr(userNotation) // when the string is data
 ```
 
 ### RollOutcome
@@ -150,7 +147,7 @@ func (o RollOutcome) Detail() string
 
 ## Actor System
 
-Map keys are lowercase by convention. `D20Dice` lowercases the *query*; it does not rewrite stored keys. It returns a `Dice` spec; the roller executes it.
+Map keys are lowercase by convention. `D20Dice` and `Dice` lowercase the *query*; they do not rewrite stored keys. They return a `Dice` spec; the roller executes it.
 
 ```go
 type Actor struct {
@@ -167,7 +164,9 @@ func NewActor(id string) *Actor
 
 func (a *Actor) Normalize() error
 
-func (a *Actor) D20Dice(keys ...string) (Dice, error)
+func (a *Actor) Dice(d Dice, keys ...string) Dice
+func (a *Actor) D20Dice(keys ...string) Dice
+func (a *Actor) DiceFromExpr(expr string, keys ...string) (Dice, error)
 ```
 
 Well-known names live in `github.com/jwebster45206/d20/vocab`. Custom string keys are allowed.
@@ -213,13 +212,15 @@ actor.Modifiers[vocab.Strength] = 4
 actor.Modifiers[vocab.Striking] = 3
 actor.Modifiers[vocab.Damage] = 1
 
-d, err := actor.D20Dice(vocab.Strength, vocab.Striking)
+d := actor.D20Dice(vocab.Strength, vocab.Striking)
 result, _ := roller.Roll(d)
 result, _ = roller.Roll(d.WithModifier("bless", 1))
 result, _ = roller.Roll(d.WithAdvantage())
+
+dmg := actor.Dice(d20.MustDiceFromExpr("1d8"), vocab.Damage, vocab.Strength)
 ```
 
-`vocab.Damage` is for damage rolls you build yourself (`d, err := NewDice(1, 8)` then `d.WithModifier(vocab.Damage, actor.Modifiers[vocab.Damage])`). `D20Dice` never auto-includes it.
+`vocab.Damage` is for damage rolls you build with `Dice` or `DiceFromExpr`. `D20Dice` never auto-includes it.
 
 
 `RollPercentile` of 2d10 (`NewDice(2, 10)`) implements compatible d100 roll-under mechanics (tens + ones, `00` = 100). 
