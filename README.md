@@ -115,7 +115,7 @@ func MustDiceFromExpr(expr string) Dice
 var ErrInvalidDiceNotation error
 ```
 
-Accepted: `"1d20"`, `"d20"`, `"2d6+3"`, `"3d8-2"`. `"1d100"` is a uniform 1–100 die. A trailing `+N`/`-N` becomes a modifier named `"modifier"`. Invalid notation fails immediately. `MustDiceFromExpr` panics on invalid notation; use it for known-good literals.
+Accepted: `"1d20"`, `"d20"`, `"2d6+3"`, `"3d8-2"`. `"1d100"` is a uniform 1–100 die. A trailing `+N`/`-N` becomes a modifier named `"modifier"`. Invalid notation fails.
 
 ```go
 d := d20.MustDiceFromExpr("2d6+3")
@@ -219,8 +219,6 @@ result, _ = roller.Roll(d.WithAdvantage())
 
 dmg := actor.Dice(d20.MustDiceFromExpr("1d8"), vocab.Damage, vocab.Strength)
 ```
-
-`vocab.Damage` is for damage rolls you build with `Dice` or `DiceFromExpr`. `D20Dice` never auto-includes it.
 
 
 `RollPercentile` of 2d10 (`NewDice(2, 10)`) implements compatible d100 roll-under mechanics (tens + ones, `00` = 100). 
