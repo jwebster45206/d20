@@ -1,5 +1,7 @@
 package d20
 
+// Action is a named roll pair: Attempt to see if it happens, Effect if it does.
+// Charges is optional remaining uses (nil means unlimited).
 type Action struct {
 	ID      string
 	Name    string

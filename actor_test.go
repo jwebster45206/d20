@@ -141,6 +141,29 @@ func TestActor_Normalize(t *testing.T) {
 	}
 }
 
+func TestActor_Normalize_actions(t *testing.T) {
+	t.Run("id and type", func(t *testing.T) {
+		a := Actor{Actions: []Action{{ID: "Dagger Strike", Type: "Attack"}}}
+		if err := a.Normalize(); err != nil {
+			t.Fatal(err)
+		}
+		if a.Actions[0].ID != "dagger_strike" || a.Actions[0].Type != "attack" {
+			t.Errorf("got ID=%q Type=%q", a.Actions[0].ID, a.Actions[0].Type)
+		}
+	})
+	t.Run("duplicate ids", func(t *testing.T) {
+		orig := []Action{{ID: "Foo Bar"}, {ID: "foo-bar"}}
+		a := Actor{Actions: orig}
+		err := a.Normalize()
+		if !errors.Is(err, ErrDuplicateKey) {
+			t.Fatalf("err = %v, want ErrDuplicateKey", err)
+		}
+		if a.Actions[0].ID != "Foo Bar" || a.Actions[1].ID != "foo-bar" {
+			t.Errorf("Actions mutated on error: %+v", a.Actions)
+		}
+	})
+}
+
 func TestActor_NewActor(t *testing.T) {
 	tests := []struct {
 		name   string

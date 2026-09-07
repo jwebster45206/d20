@@ -11,7 +11,7 @@ var (
 	// Regex to match any non-alphanumeric character for ID normalization
 	nonAlphaNumeric = regexp.MustCompile(`[^a-z0-9]+`)
 
-	// ErrDuplicateKey is returned by Normalize when two map keys collapse to the same snake_case name.
+	// ErrDuplicateKey is returned by Normalize when two map keys or action IDs collapse to the same snake_case name.
 	ErrDuplicateKey = errors.New("duplicate key after normalization")
 )
 
@@ -44,17 +44,21 @@ func normalizeIntMap(m map[string]int) (map[string]int, error) {
 	return out, nil
 }
 
-func normalizeActionSlice(a []Action) error {
-	seenIDs := make(map[string]bool)
-
-	for _, action := range a {
+func normalizeActions(actions []Action) ([]Action, error) {
+	if actions == nil {
+		return nil, nil
+	}
+	out := make([]Action, len(actions))
+	seenIDs := make(map[string]bool, len(actions))
+	for i, action := range actions {
 		action.Normalize()
-		if _, exists := seenIDs[action.ID]; exists {
-			return fmt.Errorf("%w: %q", ErrDuplicateKey, action.ID)
+		if seenIDs[action.ID] {
+			return nil, fmt.Errorf("%w: %q", ErrDuplicateKey, action.ID)
 		}
 		seenIDs[action.ID] = true
+		out[i] = action
 	}
-	return nil
+	return out, nil
 }
 
 // Actor represents a character, NPC, or monster in the game world.
@@ -66,14 +70,15 @@ func normalizeActionSlice(a []Action) error {
 //	fighter.AC = 18
 //	fmt.Println(fighter.ID) // "ironpants_son_of_arathorn"
 type Actor struct {
-	ID         string         // Unique identifier (normalized by NewActor and Normalize)
+	ID         string
+	Name       string         // Display name; not normalized
+	Alignment  string         // Caller-owned label
 	MaxHP      int            // Maximum Hit Points
 	HP         int            // Current Hit Points
 	AC         int            // Armor Class
-	Initiative int            // Initiative order (situational)
 	Attributes map[string]int // Caller-owned numbers (ability scores or skill bonuses)
 	Modifiers  map[string]int // Caller-wired roll bonuses; not derived from Attributes
-	Actions    []Action       // List of actions the actor can perform
+	Actions    []Action       // Actions the actor can take
 }
 
 // NewActor creates an Actor with a normalized ID and initialized maps.
@@ -85,8 +90,8 @@ func NewActor(id string) *Actor {
 	}
 }
 
-// Normalize rewrites ID, Attributes keys, and Modifiers keys to lowercase snake_case.
-// Two keys that collapse to the same name return ErrDuplicateKey and leave the actor unchanged.
+// Normalize rewrites ID, Attributes keys, Modifiers keys, and Action ID/Type to lowercase snake_case.
+// Two keys or action IDs that collapse to the same name return ErrDuplicateKey and leave the actor unchanged.
 // If HP is greater than MaxHP, MaxHP is set to HP.
 func (a *Actor) Normalize() error {
 	id := normalizeID(a.ID)
@@ -98,13 +103,14 @@ func (a *Actor) Normalize() error {
 	if err != nil {
 		return err
 	}
-	err = normalizeActionSlice(a.Actions)
+	acts, err := normalizeActions(a.Actions)
 	if err != nil {
 		return err
 	}
 	a.ID = id
 	a.Attributes = attrs
 	a.Modifiers = mods
+	a.Actions = acts
 	if a.HP > a.MaxHP {
 		a.MaxHP = a.HP
 	}
