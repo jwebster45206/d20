@@ -159,7 +159,7 @@ type Actor struct {
     AC         int
     Attributes map[string]int // caller-owned numbers (scores or skill bonuses)
     Modifiers  map[string]int // caller-wired roll bonuses
-    Actions    []Action
+    Actions    map[string]Action
 }
 
 type Action struct {
@@ -172,11 +172,11 @@ type Action struct {
 }
 
 func NewActor(id string) *Actor
-func NewAction(id, name, actionType string, attempt, effect Dice, charges *uint) Action
 
 func (a *Actor) Normalize() error
 func (a *Action) Normalize()
 
+func (a *Actor) Action(id string) (Action, bool)
 func (a *Actor) Dice(d Dice, keys ...string) Dice
 func (a *Actor) D20Dice(keys ...string) Dice
 func (a *Actor) DiceFromExpr(expr string, keys ...string) (Dice, error)
@@ -212,7 +212,7 @@ barbarian.AC = 14
 barbarian.Attributes["strength"] = str.Value
 ```
 
-HP, AC, name, alignment, attributes, and actions are caller-owned fields. Mutate them directly. `Normalize` rewrites actor ID, map keys, and each action's ID and type to lowercase snake_case.
+HP, AC, name, alignment, attributes, and actions are caller-owned fields. Mutate them directly. `Normalize` rewrites actor ID and map keys to lowercase snake_case, and copies each action map key onto `Action.ID`.
 
 ### Modifiers and rolls
 
