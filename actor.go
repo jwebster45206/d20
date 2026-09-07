@@ -81,7 +81,7 @@ type Actor struct {
 	AC         int               // Armor Class
 	Attributes map[string]int    // Caller-owned numbers (ability scores or skill bonuses)
 	Modifiers  map[string]int    // Caller-wired roll bonuses; not derived from Attributes
-	Actions    map[string]Action // Key is the action ID; copied onto Action.ID by Normalize
+	Actions    map[string]Action // Attempt/effect roll pairs for quick access (like a combat menu)
 }
 
 // NewActor creates an Actor with a normalized ID and initialized maps.
