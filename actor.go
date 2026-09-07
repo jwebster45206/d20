@@ -93,22 +93,37 @@ func (a *Actor) Normalize() error {
 	return nil
 }
 
-// D20Dice returns 1d20 with the named modifier keys applied.
+// Dice returns a copy of d with the named modifier keys applied.
 // Missing keys are skipped. Key names are normalized for lookup.
 // Situational extras go on the returned Dice (WithModifier) without mutating this spec.
 //
-//	d, err := actor.D20Dice("strength", "striking")
-//	out, err := roller.Roll(d.WithAdvantage())
-func (a *Actor) D20Dice(keys ...string) (Dice, error) {
-	d, err := NewDice(1, 20)
-	if err != nil {
-		return Dice{}, err
-	}
+//	d := actor.Dice(d20.MustDiceFromExpr("1d6"), "damage", "strength")
+//	out, err := roller.Roll(d)
+func (a *Actor) Dice(d Dice, keys ...string) Dice {
 	for _, name := range keys {
 		name = normalizeID(name)
 		if v, ok := a.Modifiers[name]; ok {
 			d = d.WithModifier(name, v)
 		}
 	}
-	return d, nil
+	return d
+}
+
+// D20Dice returns 1d20 with the named modifier keys applied.
+// Missing keys are skipped. Key names are normalized for lookup.
+//
+//	d := actor.D20Dice("strength", "striking")
+//	out, err := roller.Roll(d.WithAdvantage())
+func (a *Actor) D20Dice(keys ...string) Dice {
+	return a.Dice(MustNewDice(1, 20), keys...)
+}
+
+// DiceFromExpr parses notation and applies the named modifier keys.
+// Missing keys are skipped. Invalid notation returns ErrInvalidDiceNotation.
+func (a *Actor) DiceFromExpr(expr string, keys ...string) (Dice, error) {
+	d, err := DiceFromExpr(expr)
+	if err != nil {
+		return Dice{}, err
+	}
+	return a.Dice(d, keys...), nil
 }

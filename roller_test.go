@@ -13,10 +13,10 @@ func TestRoller_Roll(t *testing.T) {
 		nDice int
 		errIs error
 	}{
-		{"1d20", mustDice(1, 20), 18, 1, nil},
-		{"modifier", mustDice(1, 20).WithModifier("strength", 3), 21, 1, nil},
-		{"advantage", mustDice(1, 20).WithAdvantage(), 20, 2, nil},
-		{"disadvantage", mustDice(1, 20).WithDisadvantage(), 18, 2, nil},
+		{"1d20", MustNewDice(1, 20), 18, 1, nil},
+		{"modifier", MustNewDice(1, 20).WithModifier("strength", 3), 21, 1, nil},
+		{"advantage", MustNewDice(1, 20).WithAdvantage(), 20, 2, nil},
+		{"disadvantage", MustNewDice(1, 20).WithDisadvantage(), 18, 2, nil},
 		{"zero count", Dice{Count: 0, Faces: 20}, 0, 0, ErrRollCountZero},
 		{"zero faces", Dice{Count: 1, Faces: 0}, 0, 0, ErrDieFacesZero},
 		{"bad advantage", Dice{Count: 1, Faces: 20, Advantage: 99}, 0, 0, ErrInvalidAdvantage},
@@ -63,9 +63,9 @@ func TestRoller_RollPercentile(t *testing.T) {
 		want  int // 0 means any 1–100
 		errIs error
 	}{
-		{"2d10", 42, mustDice(2, 10), 0, nil},
-		{"00 is 100", 169, mustDice(2, 10), 100, nil},
-		{"not 2d10", 42, mustDice(1, 20), 0, ErrPercentileRequires2d10},
+		{"2d10", 42, MustNewDice(2, 10), 0, nil},
+		{"00 is 100", 169, MustNewDice(2, 10), 100, nil},
+		{"not 2d10", 42, MustNewDice(1, 20), 0, ErrPercentileRequires2d10},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -128,10 +128,10 @@ func TestRoller_RollExpr(t *testing.T) {
 
 func TestRoller_Nil(t *testing.T) {
 	var r *Roller
-	if _, err := r.Roll(mustDice(1, 20)); !errors.Is(err, ErrNilRoller) {
+	if _, err := r.Roll(MustNewDice(1, 20)); !errors.Is(err, ErrNilRoller) {
 		t.Fatalf("Roll err = %v, want ErrNilRoller", err)
 	}
-	if _, err := r.RollPercentile(mustDice(2, 10)); !errors.Is(err, ErrNilRoller) {
+	if _, err := r.RollPercentile(MustNewDice(2, 10)); !errors.Is(err, ErrNilRoller) {
 		t.Fatalf("RollPercentile err = %v, want ErrNilRoller", err)
 	}
 }
@@ -142,7 +142,7 @@ func TestRoller_Concurrent(t *testing.T) {
 	errCh := make(chan error, n)
 	for range n {
 		go func() {
-			_, err := roller.Roll(mustDice(1, 20))
+			_, err := roller.Roll(MustNewDice(1, 20))
 			errCh <- err
 		}()
 	}

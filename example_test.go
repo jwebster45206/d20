@@ -9,10 +9,7 @@ import (
 
 func Example_basicRoll() {
 	roller := d20.NewRoller(42)
-	d, err := d20.NewDice(1, 20)
-	if err != nil {
-		log.Fatal(err)
-	}
+	d := d20.MustNewDice(1, 20)
 	result, err := roller.Roll(d)
 	if err != nil {
 		log.Fatal(err)
@@ -25,10 +22,7 @@ func Example_basicRoll() {
 
 func Example_diceExpr() {
 	roller := d20.NewRoller(42)
-	d, err := d20.DiceFromExpr("2d6+3")
-	if err != nil {
-		log.Fatal(err)
-	}
+	d := d20.MustDiceFromExpr("2d6+3")
 	result, err := roller.Roll(d.WithModifier("strength", 2))
 	if err != nil {
 		log.Fatal(err)
@@ -91,10 +85,7 @@ func Example_diceNotation() {
 
 func Example_rollWithModifier() {
 	roller := d20.NewRoller(42)
-	d, err := d20.NewDice(1, 20)
-	if err != nil {
-		log.Fatal(err)
-	}
+	d := d20.MustNewDice(1, 20)
 	result, err := roller.Roll(d.WithModifier("strength", 3))
 	if err != nil {
 		log.Fatal(err)
@@ -107,10 +98,7 @@ func Example_rollWithModifier() {
 
 func Example_rollWithMultipleModifiers() {
 	roller := d20.NewRoller(42)
-	d, err := d20.NewDice(1, 20)
-	if err != nil {
-		log.Fatal(err)
-	}
+	d := d20.MustNewDice(1, 20)
 	result, err := roller.Roll(d.
 		WithModifier("strength", 3).
 		WithModifier("cover", -2))
@@ -127,10 +115,7 @@ func Example_rollWithMultipleModifiers() {
 
 func Example_rollWithAdvantage() {
 	roller := d20.NewRoller(42)
-	d, err := d20.NewDice(1, 20)
-	if err != nil {
-		log.Fatal(err)
-	}
+	d := d20.MustNewDice(1, 20)
 	result, err := roller.Roll(d.WithAdvantage())
 	if err != nil {
 		log.Fatal(err)
@@ -143,10 +128,7 @@ func Example_rollWithAdvantage() {
 
 func Example_disadvantage() {
 	roller := d20.NewRoller(42)
-	d, err := d20.NewDice(1, 20)
-	if err != nil {
-		log.Fatal(err)
-	}
+	d := d20.MustNewDice(1, 20)
 	result, err := roller.Roll(d.WithDisadvantage())
 	if err != nil {
 		log.Fatal(err)
@@ -159,10 +141,7 @@ func Example_disadvantage() {
 
 func Example_advantageWithModifier() {
 	roller := d20.NewRoller(42)
-	d, err := d20.NewDice(1, 20)
-	if err != nil {
-		log.Fatal(err)
-	}
+	d := d20.MustNewDice(1, 20)
 	result, err := roller.Roll(d.
 		WithAdvantage().
 		WithModifier("dexterity", 4))
@@ -197,10 +176,7 @@ func Example_actorD20Dice() {
 	actor.Modifiers["strength"] = 4
 	actor.Modifiers["striking"] = 3
 
-	d, err := actor.D20Dice("strength", "striking")
-	if err != nil {
-		log.Fatal(err)
-	}
+	d := actor.D20Dice("strength", "striking")
 	result, err := roller.Roll(d)
 	if err != nil {
 		log.Fatal(err)
@@ -209,6 +185,22 @@ func Example_actorD20Dice() {
 	fmt.Printf("Roll: %d\n", result.Value)
 	// Output:
 	// Roll: 25
+}
+
+func Example_actorDice() {
+	roller := d20.NewRoller(42)
+	actor := d20.NewActor("Rogue")
+	actor.Modifiers["damage"] = 2
+	actor.Modifiers["strength"] = 4
+
+	d := actor.Dice(d20.MustDiceFromExpr("1d6"), "damage", "strength")
+	result, err := roller.Roll(d)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(result.Detail())
+	// Output:
+	// Rolled 1d6... 6; +2 damage, +4 strength; *Result: 12*
 }
 
 func Example_attributes() {
@@ -246,10 +238,7 @@ func Example_d20DiceModifiers() {
 	actor.Modifiers["striking"] = 3
 	actor.Modifiers["damage"] = 2
 
-	strike, err := actor.D20Dice("strength", "striking")
-	if err != nil {
-		log.Fatal(err)
-	}
+	strike := actor.D20Dice("strength", "striking")
 	result, err := roller.Roll(strike)
 	if err != nil {
 		log.Fatal(err)

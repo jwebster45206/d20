@@ -23,7 +23,7 @@ var rollNotationFmt = regexp.MustCompile(`^(\d*)d(\d+)(([+-])(\d+))?$`)
 // Dice is a roll configuration: count, faces, modifiers, and advantage.
 // It is data. A Roller executes it.
 //
-//	d, err := d20.NewDice(1, 20)
+//	d := d20.MustNewDice(1, 20)
 //	out, err := roller.Roll(d.WithModifier("strength", 3))
 type Dice struct {
 	Count     uint
@@ -42,6 +42,16 @@ func NewDice(count, faces uint) (Dice, error) {
 		return Dice{}, ErrDieFacesZero
 	}
 	return Dice{Count: count, Faces: faces}, nil
+}
+
+// MustNewDice is like NewDice but panics on error.
+// Use it for known-good literals (1d20, 2d6).
+func MustNewDice(count, faces uint) Dice {
+	d, err := NewDice(count, faces)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 // DiceFromExpr parses standard dice notation such as "1d20", "d6", "2d6+3", or "3d8-2".
@@ -84,6 +94,16 @@ func DiceFromExpr(expr string) (Dice, error) {
 		d = d.WithModifier("modifier", modValue)
 	}
 	return d, nil
+}
+
+// MustDiceFromExpr is like DiceFromExpr but panics on error.
+// Use it for known-good literals ("1d6", "2d6+3").
+func MustDiceFromExpr(expr string) Dice {
+	d, err := DiceFromExpr(expr)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 // WithModifier returns a copy with an added modifier. The name is lowercased.

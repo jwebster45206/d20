@@ -245,10 +245,7 @@ func TestActor_D20Dice(t *testing.T) {
 				actor.Modifiers = tt.mods
 			}
 
-			d, err := actor.D20Dice(tt.keys...)
-			if err != nil {
-				t.Fatalf("D20Dice: %v", err)
-			}
+			d := actor.D20Dice(tt.keys...)
 			if tt.advantage {
 				d = d.WithAdvantage()
 			}
@@ -270,5 +267,58 @@ func TestActor_D20Dice(t *testing.T) {
 				t.Errorf("Detail() = %q, want match %q", out.Detail(), tt.detailRE)
 			}
 		})
+	}
+}
+
+func TestActor_Dice(t *testing.T) {
+	actor := NewActor("hero")
+	actor.Modifiers = map[string]int{"strength": -1, "damage": 2, "dagger": 3}
+
+	orig := MustDiceFromExpr("1d6")
+	d := actor.Dice(orig, "damage", "strength", "dagger")
+	if d.Count != 1 || d.Faces != 6 {
+		t.Errorf("got %dd%d, want 1d6", d.Count, d.Faces)
+	}
+	want := []Modifier{
+		{Reason: "damage", Value: 2},
+		{Reason: "strength", Value: -1},
+		{Reason: "dagger", Value: 3},
+	}
+	if len(d.Modifiers) != len(want) {
+		t.Fatalf("Modifiers = %v, want %v", d.Modifiers, want)
+	}
+	for i, m := range want {
+		if d.Modifiers[i] != m {
+			t.Errorf("Modifiers[%d] = %+v, want %+v", i, d.Modifiers[i], m)
+		}
+	}
+	if len(orig.Modifiers) != 0 {
+		t.Errorf("original Dice mutated: %v", orig.Modifiers)
+	}
+
+	d = actor.Dice(MustNewDice(1, 8), "strength", "striking")
+	if len(d.Modifiers) != 1 || d.Modifiers[0] != (Modifier{Reason: "strength", Value: -1}) {
+		t.Errorf("skipped missing: Modifiers = %v", d.Modifiers)
+	}
+}
+
+func TestActor_DiceFromExpr(t *testing.T) {
+	actor := NewActor("hero")
+	actor.Modifiers = map[string]int{"strength": 4}
+
+	d, err := actor.DiceFromExpr("2d6", "strength", "missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Count != 2 || d.Faces != 6 {
+		t.Errorf("got %dd%d, want 2d6", d.Count, d.Faces)
+	}
+	if len(d.Modifiers) != 1 || d.Modifiers[0] != (Modifier{Reason: "strength", Value: 4}) {
+		t.Errorf("Modifiers = %v, want strength +4", d.Modifiers)
+	}
+
+	_, err = actor.DiceFromExpr("not-dice", "strength")
+	if !errors.Is(err, ErrInvalidDiceNotation) {
+		t.Fatalf("err = %v, want ErrInvalidDiceNotation", err)
 	}
 }
